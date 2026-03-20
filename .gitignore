@@ -22,3 +22,21 @@ Thumbs.db
 
 # Docs (local only)
 docs/
+
+# Sensitive files
+.wechat-token
+wechat-messages.json
+
+# Backup files
+*.backup
+*.broken
+*.bak
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Development notes
+*.txt
+!README.txt
