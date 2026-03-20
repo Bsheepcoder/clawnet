@@ -7,34 +7,65 @@
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const ora = require('ora');
-const figlet = require('figlet');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const packageJson = require('../package.json');
 
 const CLAWNET_URL = process.env.CLAWNET_URL || 'http://localhost:3000';
 const CONFIG_FILE = path.join(process.env.HOME || process.env.USERPROFILE, '.clawnetrc');
 
-// 显示大标题
-function showTitle() {
+// ASCII Art Logo (fallback if figlet not available)
+const showBanner = () => {
   console.log();
-  console.log(chalk.cyan(figlet.textSync('ClawNet', { 
-    font: 'Standard',
-    horizontalLayout: 'fitted',
-    verticalLayout: 'default'
-  })));
-  console.log(chalk.gray('  Relation-Driven Multi-Node Collaboration Network'));
+  try {
+    const figlet = require('figlet');
+    const banner = figlet.textSync('ClawNet', { 
+      font: 'Standard',
+      horizontalLayout: 'fitted',
+      verticalLayout: 'default'
+    });
+    console.log(chalk.cyan(banner));
+  } catch (error) {
+    // Fallback: figlet not available
+    console.log();
+    console.log(chalk.cyan.bold('╔═══════════════════════════════════╗'));
+    console.log(chalk.cyan.bold('  ║') + chalk.white.bold('       🤖 ClawNet CLI v' + packageJson.version.padEnd(13)) + chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('  ║') + chalk.gray('  Relation-Driven Collaboration Network  ') + chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('  ╚═══════════════════════════════════╝'));
+  }
   console.log(chalk.gray('  Version: 0.5.3'));
   console.log();
-}
+};
+
+// 配置管理
+const loadConfig = () => {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    }
+  } catch (error) {
+    // 忽略错误
+  }
+  return {};
+};
+
+const saveConfig = (config) => {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  } catch (error) {
+    // 忽略错误
+  }
+};
+
+const config = loadConfig();
+const CLAWNET_TOKEN = process.env.CLAWNET_TOKEN || config.token || 'clawnet-secret-token';
 
 // API 请求
 async function request(endpoint, options = {}) {
-  const config = loadConfig();
-  const url = `${config.url || CLAWNET_URL}${endpoint}`;
+  const url = `${CLAWNET_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${config.token || 'clawnet-secret-token'}`,
+    'Authorization': `Bearer ${CLAWNET_TOKEN}`,
     ...options.headers
   };
 
@@ -48,66 +79,63 @@ async function request(endpoint, options = {}) {
   return result;
 }
 
-function loadConfig() {
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    }
-  } catch (error) {}
-  return {};
-}
+// 创建主命令
+const { Command } = require('commander');
 
-function saveConfig(config) {
-  try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-  } catch (error) {}
-}
+const program = new Command();
 
-// 清屏
-function clearScreen() {
-  console.clear();
-  showTitle();
-}
+program
+  .name('clawnet-interactive')
+  .description('🎮 启动 ClawNet 交互式命令行界面')
+  .option('-u, --url <url>', 'ClawNet 服务器地址', CLAWNET_URL)
+  .option('-t, --token <token>', 'API Token', CLAWNET_TOKEN)
+  .option('--no-color', '禁用彩色输出')
+  .option('--no-banner', '禁用启动横幅')
+  .hook('preAction', (thisCommand) => {
+    const options = thisCommand.opts();
+    if (options.url) process.env.CLAWNET_URL = options.url;
+    if (options.token) process.env.CLAWNET_TOKEN = options.token;
+  });
 
-// 主菜单
+// ========== 主菜单 ==========
 async function mainMenu() {
-  clearScreen();
+  if (!program.opts().noBanner) {
+    showBanner();
+  }
 
   const { action } = await inquirer.prompt([
     {
       type: 'list',
       name: 'action',
       message: '选择操作:',
-      pageSize: 15,
+      pageSize: 20,
       choices: [
-        new inquirer.Separator('─── 节点管理 ───'),
-        { name: '➕  创建节点', value: 'create-node' },
-        { name: '📋  查看节点列表', value: 'list-nodes' },
-        { name: '🔍  查看节点详情', value: 'get-node' },
-        { name: '🗑️  删除节点', value: 'delete-node' },
-        { name: '📤  导出节点', value: 'export-nodes' },
-        { name: '📥  导入节点', value: 'import-nodes' },
+        new inquirer.Separator('─── 📦 节点管理 ───'),
+        { name: '➕ 创建节点', value: 'create-node' },
+        { name: '📋 查看节点列表', value: 'list-nodes' },
+        { name: '🔍 查看节点详情', value: 'get-node' },
+        { name: '🗑️ 删除节点', value: 'delete-node' },
         
-        new inquirer.Separator('─── 关系管理 ───'),
-        { name: '➕  创建关系', value: 'create-relation' },
-        { name: '⏱️  创建临时关系', value: 'create-ttl-relation' },
-        { name: '📋  查看关系列表', value: 'list-relations' },
-        { name: '🧹  清理过期关系', value: 'cleanup-relations' },
+        new inquirer.Separator('─── 🔗 关系管理 ───'),
+        { name: '➕ 创建关系', value: 'create-relation' },
+        { name: '📋 查看关系列表', value: 'list-relations' },
+        { name: '🧹 清理过期关系', value: 'cleanup-relations' },
         
-        new inquirer.Separator('─── 权限管理 ───'),
-        { name: '🔐  检查权限', value: 'check-permission' },
+        new inquirer.Separator('─── 🔐 权限管理 ───'),
+        { name: '🔍 检查权限', value: 'check-permission' },
         
-        new inquirer.Separator('─── 系统管理 ───'),
-        { name: '📊  系统状态', value: 'health' },
-        { name: '📡  在线节点', value: 'list-online' },
-        { name: '🔑  生成 Token', value: 'generate-token' },
+        new inquirer.Separator('─── 📊 系统管理 ───'),
+        { name: '📊 系统状态', value: 'health' },
+        { name: '📡 在线节点', value: 'list-online' },
+        { name: '🔑 生成 Token', value: 'generate-token' },
         
-        new inquirer.Separator('─── 配置管理 ───'),
-        { name: '⚙️  配置管理', value: 'config' },
+        new inquirer.Separator('─── ⚙️ 配置管理 ───'),
+        { name: '⚙️ 配置管理', value: 'config' },
         
-        new inquirer.Separator('─── 其他 ───'),
-        { name: '❓  帮助', value: 'help' },
-        { name: '🚪  退出', value: 'exit' }
+        new inquirer.Separator('─── 📚 帮助 ───'),
+        { name: '❓ 帮助信息', value: 'help' },
+        new inquirer.Separator(),
+        { name: '❌ 退出', value: 'exit' }
       ]
     }
   ]);
@@ -115,10 +143,11 @@ async function mainMenu() {
   return action;
 }
 
-// 创建节点
+// ========== 节点管理 ==========
 async function createNode() {
-  clearScreen();
-  console.log(chalk.cyan('  ➕ 创建节点\n'));
+  console.log();
+  console.log(chalk.cyan.bold('➕ 创建节点'));
+  console.log();
 
   const answers = await inquirer.prompt([
     {
@@ -190,13 +219,20 @@ async function createNode() {
     spinner.fail(chalk.red(`❌ 创建失败: ${error.message}`));
   }
 
-  await pressEnter();
+  await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'continue',
+      message: '按回车继续...'
+    }
+  ]);
 }
 
 // 列出节点
 async function listNodes() {
-  clearScreen();
-  console.log(chalk.cyan('  📋 节点列表\n'));
+  console.log();
+  console.log(chalk.cyan.bold('📋 查看节点列表'));
+  console.log();
 
   const spinner = ora('加载节点列表...').start();
 
@@ -205,27 +241,21 @@ async function listNodes() {
     spinner.succeed();
 
     if (result.data.length === 0) {
-      console.log(chalk.yellow('  暂无节点\n'));
+      console.log(chalk.yellow('\n  暂无节点\n'));
       await pressEnter();
       return;
     }
 
+    console.log(chalk.cyan(`\n  📋 节点列表 (${result.data.length} 个):\n`));
+
     // 按类型分组
     const grouped = {};
     result.data.forEach(node => {
-      if (!grouped[node.type]) {
-        grouped[node.type] = [];
-      }
+      if (!grouped[node.type]) grouped[node.type] = [];
       grouped[node.type].push(node);
     });
 
-    const typeEmojis = {
-      bot: '🤖',
-      human: '👤',
-      device: '📱',
-      org: '🏢',
-      system: '⚙️'
-    };
+    const typeEmojis = { bot: '🤖', human: '👤', device: '📱', org: '🏢', system: '⚙️' };
 
     for (const [type, nodes] of Object.entries(grouped)) {
       console.log(chalk.cyan(`  ${typeEmojis[type] || '📦'} ${type.toUpperCase()}`));
@@ -243,8 +273,9 @@ async function listNodes() {
 
 // 查看节点详情
 async function getNode() {
-  clearScreen();
-  console.log(chalk.cyan('  🔍 查看节点详情\n'));
+  console.log();
+  console.log(chalk.cyan.bold('🔍 查看节点详情'));
+  console.log();
 
   const { id } = await inquirer.prompt([
     {
@@ -262,8 +293,7 @@ async function getNode() {
     spinner.succeed();
 
     console.log();
-    console.log(chalk.cyan('  📄 节点详情:'));
-    console.log();
+    console.log(chalk.cyan('  📄 节点详情:\n'));
     console.log(chalk.gray(`  ID:     ${result.data.id}`));
     console.log(chalk.gray(`  名称:   ${result.data.name}`));
     console.log(chalk.gray(`  类型:   ${result.data.type}`));
@@ -284,8 +314,9 @@ async function getNode() {
 
 // 删除节点
 async function deleteNode() {
-  clearScreen();
-  console.log(chalk.cyan('  🗑️  删除节点\n'));
+  console.log();
+  console.log(chalk.cyan.bold('🗑️  删除节点'));
+  console.log();
 
   const { id } = await inquirer.prompt([
     {
@@ -323,10 +354,11 @@ async function deleteNode() {
   await pressEnter();
 }
 
-// 创建关系
+// ========== 关系管理 ==========
 async function createRelation() {
-  clearScreen();
-  console.log(chalk.cyan('  ➕ 创建关系\n'));
+  console.log();
+  console.log(chalk.cyan.bold('➕ 创建关系'));
+  console.log();
 
   const answers = await inquirer.prompt([
     {
@@ -385,8 +417,9 @@ async function createRelation() {
 
 // 列出关系
 async function listRelations() {
-  clearScreen();
-  console.log(chalk.cyan('  📋 关系列表\n'));
+  console.log();
+  console.log(chalk.cyan.bold('📋 查看关系列表'));
+  console.log();
 
   const spinner = ora('加载关系列表...').start();
 
@@ -395,12 +428,12 @@ async function listRelations() {
     spinner.succeed();
 
     if (result.data.length === 0) {
-      console.log(chalk.yellow('  暂无关系\n'));
+      console.log(chalk.yellow('\n  暂无关系\n'));
       await pressEnter();
       return;
     }
 
-    console.log(chalk.cyan(`  🔗 关系列表 (${result.data.length} 个):\n`));
+    console.log(chalk.cyan(`\n  🔗 关系列表 (${result.data.length} 个):\n`));
 
     result.data.forEach(rel => {
       const status = rel.isTemporary ? 
@@ -418,10 +451,101 @@ async function listRelations() {
   await pressEnter();
 }
 
-// 系统状态
+// 清理过期关系
+async function cleanupRelations() {
+  console.log();
+  console.log(chalk.cyan.bold('🧹 清理过期关系'));
+  console.log();
+
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: '确定清理所有过期关系?',
+      default: true
+    }
+  ]);
+
+  if (!confirm) {
+    return;
+  }
+
+  const spinner = ora('清理过期关系...').start();
+
+  try {
+    const result = await request('/relations/cleanup', { method: 'POST' });
+    spinner.succeed(chalk.green(`✅ 已清理 ${result.data.cleaned} 个过期关系`));
+  } catch (error) {
+    spinner.fail(chalk.red(`❌ 清理失败: ${error.message}`));
+  }
+
+  await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'continue',
+      message: '按回车继续...'
+    }
+  ]);
+}
+
+// ========== 权限命令 ==========
+async function checkPermission() {
+  console.log();
+  console.log(chalk.cyan.bold('🔐 检查权限'));
+  console.log();
+
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'node',
+      message: '节点 ID:',
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    },
+    {
+      type: 'input',
+      name: 'target',
+      message: '目标节点 ID:',
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    },
+    {
+      type: 'input',
+      name: 'action',
+      message: '操作 (read/write/admin):',
+      default: 'read'
+    }
+  ]);
+
+  const spinner = ora('检查权限...').start();
+
+  try {
+    const result = await request(
+      `/permissions/check?node=${answers.node}&target=${answers.target}&action=${answers.action}`
+    );
+    spinner.succeed();
+
+    const icon = result.data.allowed ? '✅' : '❌';
+    console.log(chalk.cyan(`\n  ${icon} 权限检查:`));
+    console.log(chalk.gray(`  ${result.data.node} → ${result.data.target}`));
+    console.log(chalk.gray(`  操作: ${result.data.action}`));
+    console.log(chalk.gray(`  结果: ${result.data.allowed ? '允许' : '拒绝'}\n`));
+  } catch (error) {
+    spinner.fail(chalk.red(`❌ 检查失败: ${error.message}`));
+  }
+
+  await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'continue',
+      message: '按回车继续...'
+    }
+  ]);
+}
+
+// ========== 服务管理命令 ==========
 async function showHealth() {
-  clearScreen();
-  console.log(chalk.cyan('  📊 系统状态\n'));
+  console.log();
+  console.log(chalk.cyan.bold('📊 系统状态'));
+  console.log();
 
   const spinner = ora('检查系统状态...').start();
 
@@ -430,7 +554,7 @@ async function showHealth() {
     spinner.succeed();
 
     console.log();
-    console.log(chalk.cyan('  系统信息:'));
+    console.log(chalk.cyan('  📊 系统状态:\n'));
     console.log(chalk.gray(`  状态: ${result.status}`));
     console.log();
     console.log(chalk.cyan('  功能:'));
@@ -438,25 +562,29 @@ async function showHealth() {
     console.log(chalk.gray(`  WebSocket: ${result.features.websocket ? '✅' : '❌'}`));
     console.log(chalk.gray(`  认证:      ${result.features.auth ? '✅' : '❌'}`));
     console.log();
-    console.log(chalk.cyan('  统计:'));
+    console.log(chalk.cyan('  统计:\n'));
     console.log(chalk.gray(`  节点数:    ${result.stats.nodes}`));
     console.log(chalk.gray(`  关系数:    ${result.stats.relations}`));
-    console.log(chalk.gray(`  WS 连接:   ${result.stats.wsConnections}`));
-    console.log();
+    console.log(chalk.gray(`  WS 连接:   ${result.stats.wsConnections}\n`));
   } catch (error) {
     spinner.fail(chalk.red(`❌ 连接失败: ${error.message}`));
-    console.log(chalk.yellow('\n  💡 请确保 ClawNet 服务正在运行:'));
-    console.log(chalk.gray('     npm start'));
-    console.log();
+    console.log(chalk.yellow('\n  💡 请确保 ClawNet 服务正在运行: npm start\n'));
   }
 
-  await pressEnter();
+  await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'continue',
+      message: '按回车继续...'
+    }
+  ]);
 }
 
-// 配置管理
+// ========== 配置管理 ==========
 async function configMenu() {
-  clearScreen();
-  console.log(chalk.cyan('  ⚙️  配置管理\n'));
+  console.log();
+  console.log(chalk.cyan.bold('⚙️  配置管理'));
+  console.log();
 
   const { action } = await inquirer.prompt([
     {
@@ -467,13 +595,10 @@ async function configMenu() {
         { name: '🔧 配置服务器地址', value: 'server' },
         { name: '🔑 配置 Token', value: 'token' },
         { name: '📋 查看当前配置', value: 'view' },
-        new inquirer.Separator(),
         { name: '🔙 返回主菜单', value: 'back' }
       ]
     }
   ]);
-
-  const config = loadConfig();
 
   switch (action) {
     case 'server':
@@ -482,7 +607,7 @@ async function configMenu() {
           type: 'input',
           name: 'url',
           message: '服务器地址:',
-          default: config.url || CLAWNET_URL
+          default: CLAWNET_URL
         }
       ]);
       config.url = url;
@@ -506,7 +631,7 @@ async function configMenu() {
 
     case 'view':
       console.log();
-      console.log(chalk.cyan('  当前配置:'));
+      console.log(chalk.cyan('  当前配置:\n'));
       console.log(chalk.gray(`  服务器: ${config.url || CLAWNET_URL}`));
       console.log(chalk.gray(`  Token:  ${config.token ? '已配置' : '未配置'}`));
       console.log();
@@ -516,27 +641,34 @@ async function configMenu() {
       return;
   }
 
-  await pressEnter();
-  await configMenu();
+  await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'continue',
+      message: '按回车继续...'
+    }
+  ]);
 }
 
 // 帮助信息
 function showHelp() {
-  clearScreen();
-  console.log(chalk.cyan('  ❓ 帮助信息\n'));
-  console.log(chalk.gray('  ClawNet 是一个关系驱动的多节点智能协作网络。\n'));
-  console.log(chalk.cyan('  核心概念:'));
-  console.log(chalk.gray('  • 节点 (Node): 人、机器人、设备、组织等实体'));
-  console.log(chalk.gray('  • 关系 (Relation): 节点之间的连接'));
-  console.log(chalk.gray('  • 权限 (Permission): 基于关系的访问控制'));
   console.log();
-  console.log(chalk.cyan('  快速开始:'));
+  console.log(chalk.cyan('  ❓ 帮助信息'));
+  console.log();
+  
+  console.log(chalk.cyan.bold('  ClawNet 是一个关系驱动的多节点智能协作网络。\n'));
+  console.log(chalk.gray('  核心概念:\n'));
+  console.log(chalk.gray('  • 节点 - 人、机器人、设备、组织等实体'));
+  console.log(chalk.gray('  • 关系 - 节点之间的连接'));
+  console.log(chalk.gray('  • 权限 - 基于关系的访问控制\n'));
+  console.log(chalk.cyan.bold('  快速开始:\n'));
   console.log(chalk.gray('  1. 创建节点: 节点管理 → 创建节点'));
   console.log(chalk.gray('  2. 建立关系: 关系管理 → 创建关系'));
-  console.log(chalk.gray('  3. 检查权限: 权限管理 → 检查权限'));
+  console.log(chalk.gray('  3. 检查权限: 权限管理 → 检查权限\n'));
   console.log();
-  console.log(chalk.cyan('  文档:'));
-  console.log(chalk.gray('  https://github.com/Bsheepcoder/ClawNet'));
+  console.log(chalk.cyan.bold('  文档:\n'));
+  console.log(chalk.gray('  GitHub: https://github.com/Bsheepcoder/ClawNet'));
+  console.log(chalk.gray('  文档: https://github.com/Bsheepcoder/ClawNet#readme\n'));
   console.log();
 }
 
@@ -553,82 +685,63 @@ async function pressEnter() {
 
 // 主程序
 async function main() {
-  showTitle();
+  try {
+    while (true) {
+      try {
+        const action = await mainMenu();
 
-  while (true) {
-    try {
-      const action = await mainMenu();
-
-      switch (action) {
-        case 'create-node':
-          await createNode();
-          break;
-        case 'list-nodes':
-          await listNodes();
-          break;
-        case 'get-node':
-          await getNode();
-          break;
-        case 'delete-node':
-          await deleteNode();
-          break;
-        case 'export-nodes':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'import-nodes':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'create-relation':
-          await createRelation();
-          break;
-        case 'create-ttl-relation':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'list-relations':
-          await listRelations();
-          break;
-        case 'cleanup-relations':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'check-permission':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'health':
-          await showHealth();
-          break;
-        case 'list-online':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'generate-token':
-          console.log(chalk.yellow('\n  功能开发中...\n'));
-          await pressEnter();
-          break;
-        case 'config':
-          await configMenu();
-          break;
-        case 'help':
-          showHelp();
-          await pressEnter();
-          break;
-        case 'exit':
-          clearScreen();
+        switch (action) {
+          case 'create-node':
+            await createNode();
+            break;
+          case 'list-nodes':
+            await listNodes();
+            break;
+          case 'get-node':
+            await getNode();
+            break;
+          case 'delete-node':
+            await deleteNode();
+            break;
+          case 'create-relation':
+            await createRelation();
+            break;
+          case 'list-relations':
+            await listRelations();
+            break;
+          case 'cleanup-relations':
+            await cleanupRelations();
+            break;
+          case 'check-permission':
+            await checkPermission();
+            break;
+          case 'health':
+            await showHealth();
+            break;
+          case 'config':
+            await configMenu();
+            break;
+          case 'help':
+            showHelp();
+            await pressEnter();
+            break;
+          case 'exit':
+            console.log();
+            console.log(chalk.cyan('  再见! 👋\n'));
+            process.exit(0);
+        }
+      } catch (error) {
+        if (error.message === 'User force closed with prompt with a non-null value') {
+          console.log();
           console.log(chalk.cyan('  再见! 👋\n'));
           process.exit(0);
+        }
+        console.error(chalk.red(`\n  错误: ${error.message}\n`));
       }
-    } catch (error) {
-      if (error.message === 'User force closed the prompt') {
-        console.log(chalk.cyan('\n  再见! 👋\n'));
-        process.exit(0);
-      }
-      console.error(chalk.red(`\n  错误: ${error.message}\n`));
-      await pressEnter();
     }
+  } catch (error) {
+    console.error(chalk.red(`\n  致命错误: ${error.message}\n`));
+    process.exit(1);
   }
 }
 
