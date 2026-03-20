@@ -9,6 +9,10 @@ const inquirer = require('inquirer');
 const ora = require('ora');
 const fs = require('fs');
 const path = require('path');
+
+// Import Separator correctly for inquirer v9+
+const Separator = inquirer.Separator || inquirer.default?.Separator;
+
 const packageJson = require('../package.json');
 
 const CLAWNET_URL = process.env.CLAWNET_URL || 'http://localhost:3000';
@@ -33,7 +37,7 @@ const showBanner = () => {
     console.log(chalk.cyan.bold('  ║') + chalk.gray('  Relation-Driven Collaboration Network  ') + chalk.cyan.bold('║'));
     console.log(chalk.cyan.bold('  ╚═══════════════════════════════════╝'));
   }
-  console.log(chalk.gray('  Version: 0.5.3'));
+  console.log(chalk.gray('  Version: ' + packageJson.version));
   console.log();
 };
 
@@ -110,31 +114,31 @@ async function mainMenu() {
       message: '选择操作:',
       pageSize: 20,
       choices: [
-        new inquirer.Separator('─── 📦 节点管理 ───'),
+        new Separator('─── 📦 节点管理 ───'),
         { name: '➕ 创建节点', value: 'create-node' },
         { name: '📋 查看节点列表', value: 'list-nodes' },
         { name: '🔍 查看节点详情', value: 'get-node' },
         { name: '🗑️ 删除节点', value: 'delete-node' },
         
-        new inquirer.Separator('─── 🔗 关系管理 ───'),
+        new Separator('─── 🔗 关系管理 ───'),
         { name: '➕ 创建关系', value: 'create-relation' },
         { name: '📋 查看关系列表', value: 'list-relations' },
         { name: '🧹 清理过期关系', value: 'cleanup-relations' },
         
-        new inquirer.Separator('─── 🔐 权限管理 ───'),
+        new Separator('─── 🔐 权限管理 ───'),
         { name: '🔍 检查权限', value: 'check-permission' },
         
-        new inquirer.Separator('─── 📊 系统管理 ───'),
+        new Separator('─── 📊 系统管理 ───'),
         { name: '📊 系统状态', value: 'health' },
         { name: '📡 在线节点', value: 'list-online' },
         { name: '🔑 生成 Token', value: 'generate-token' },
         
-        new inquirer.Separator('─── ⚙️ 配置管理 ───'),
+        new Separator('─── ⚙️ 配置管理 ───'),
         { name: '⚙️ 配置管理', value: 'config' },
         
-        new inquirer.Separator('─── 📚 帮助 ───'),
+        new Separator('─── 📚 帮助 ───'),
         { name: '❓ 帮助信息', value: 'help' },
-        new inquirer.Separator(),
+        new Separator(),
         { name: '❌ 退出', value: 'exit' }
       ]
     }
