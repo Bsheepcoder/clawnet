@@ -46,7 +46,35 @@ All notable changes to this project will be documented in this file.
 - Command structure changed to grouped format
 - Old flat commands still work but deprecated
 
-## [0.5.3] - 2026-03-20
+## [0.6.0] - 2026-03-20
+
+### Added
+- 🎉 **Major CLI overhaul**
+  - Complete rewrite using Commander.js
+  - Dual mode: Traditional CLI + Interactive CLI
+  - Command grouping (node/relation/config)
+  - Command aliases (nodes, ls, rm, i)
+  - Global options (--url, --token, --json, --no-color)
+  - ASCII Art banner with figlet
+- 📚 **New documentation**
+  - CLI-UPGRADE.md - CLI upgrade guide
+  - WINDOWS_QUICKSTART.md - 1-minute Windows setup
+
+### Improved
+- ✅ **User Experience**
+  - Better error messages
+  - Progress spinners
+  - Colored output
+  - Configuration persistence
+  - JSON output support
+  - Better help text
+  - Grouped menu in interactive mode
+
+### Dependencies
+- figlet: ^1.7.0 (ASCII Art)
+
+### Changed
+- **Breaking Change:** CLI commands have been reorganized. See [CLI-UPGRADE.md](CLI-## [0.5.3] - 2026-03-20
 
 ### Added
 - 🎉 **Interactive CLI** (clawnet-interactive)
