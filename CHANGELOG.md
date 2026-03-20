@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.3] - 2026-03-20
+
+### Added
+- 🎉 **Interactive CLI** (clawnet-interactive)
+  - Menu-based user interface
+  - Colored output with chalk
+  - Progress spinners with ora
+  - User-friendly prompts with inquirer
+- 🔧 **Configuration management**
+  - Auto-save configuration to ~/.clawnetrc
+  - Cross-session persistence
+- 📦 **Node export/import**
+  - Export nodes to JSON
+  - Import nodes in batch
+- ⏱️ **Temporary relations (TTL) UI**
+  - Interactive TTL creation
+  - Expiration warnings
+- 🎨 **Enhanced UX**
+  - Node grouping by type
+  - Colored status indicators
+  - Confirmation dialogs
+  - Progress feedback
+
+### Dependencies
+- chalk: ^4.1.2 (colored output)
+- commander: ^12.0.0 (CLI framework)
+- inquirer: ^9.2.0 (interactive prompts)
+- ora: ^7.0.0 (progress spinners)
+
+### Documentation
+- Add CLI-GUIDE.md with detailed usage
+- Update README with CLI tools section
+
+### Fixed
+- Improved error handling
+- Better error messages
+
+## [0.5.2] - 2026-03-20
+
+### Fixed
+- Package metadata corrections
+
+## [0.5.1] - 2026-03-20
+
+### Added
+- 📝 **English documentation** (default language)
+- 🇨🇳 **Chinese documentation** (README_CN.md)
+- 📦 **npm badges** in README
+- 🪟 **Windows installation guide** (INSTALL_WINDOWS.md)
+- 🔗 **Features documentation** (FEATURES.md)
+
+### Changed
+- Repository URL: https://github.com/Bsheepcoder/ClawNet
+- Default README language: English
+- Improved package.json metadata
+
 ## [0.5.0] - 2026-03-20
 
 ### Added

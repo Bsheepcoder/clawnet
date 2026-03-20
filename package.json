@@ -1,6 +1,6 @@
 {
   "name": "@husile/clawnet",
-  "version": "0.5.0",
+  "version": "0.5.3",
   "description": "Relation-Driven Multi-Node Intelligent Collaboration Network",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
