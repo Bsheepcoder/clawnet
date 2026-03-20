@@ -1,6 +1,539 @@
 #!/usr/bin/env node
 /**
- * ClawNet CLI 入口
+ * ClawNet CLI - Optimized Command Line Interface
+ * Inspired by OpenClaw and OpenCode CLI design
  */
 
-require('../cli/clawnet.js');
+const { Command } = require('commander');
+const chalk = require('chalk');
+const inquirer = require('inquirer');
+const ora = require('ora');
+const fs = require('fs');
+const path = require('path');
+const packageJson = require('../package.json');
+
+const CLAWNET_URL = process.env.CLAWNET_URL || 'http://localhost:3000';
+const CONFIG_FILE = path.join(process.env.HOME || process.env.USERPROFILE, '.clawnetrc');
+
+// ASCII Art Logo
+const showBanner = () => {
+  console.log();
+  console.log(chalk.cyan.bold('  ╔═══════════════════════════════════════╗'));
+  console.log(chalk.cyan.bold('  ║') + chalk.white.bold('       🤖 ClawNet CLI v' + packageJson.version.padEnd(13)) + chalk.cyan.bold('║'));
+  console.log(chalk.cyan.bold('  ║') + chalk.gray('  Relation-Driven Collaboration Network  ') + chalk.cyan.bold('║'));
+  console.log(chalk.cyan.bold('  ╚═══════════════════════════════════════╝'));
+  console.log();
+};
+
+// 配置管理
+const loadConfig = () => {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    }
+  } catch (error) {
+    // 忽略错误
+  }
+  return {};
+};
+
+const saveConfig = (config) => {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  } catch (error) {
+    // 忽略错误
+  }
+};
+
+const config = loadConfig();
+const CLAWNET_TOKEN = process.env.CLAWNET_TOKEN || config.token || 'clawnet-secret-token';
+
+// API 请求
+async function request(endpoint, options = {}) {
+  const url = `${CLAWNET_URL}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${CLAWNET_TOKEN}`,
+    ...options.headers
+  };
+
+  const response = await fetch(url, { ...options, headers });
+  const result = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(result.error || response.statusText);
+  }
+
+  return result;
+}
+
+// 创建主命令
+const program = new Command();
+
+program
+  .name('clawnet')
+  .description('🤖 ClawNet - Relation-Driven Multi-Node Collaboration Network')
+  .version(packageJson.version, '-v, --version', '显示版本号')
+  .option('-u, --url <url>', 'ClawNet 服务器地址', CLAWNET_URL)
+  .option('-t, --token <token>', 'API Token', CLAWNET_TOKEN)
+  .option('--no-color', '禁用彩色输出')
+  .option('--json', '输出 JSON 格式')
+  .hook('preAction', (thisCommand) => {
+    const options = thisCommand.opts();
+    if (options.url) process.env.CLAWNET_URL = options.url;
+    if (options.token) process.env.CLAWNET_TOKEN = options.token;
+  });
+
+// ========== 节点管理命令 ==========
+const nodeCommand = program.command('node')
+  .description('📦 节点管理')
+  .alias('nodes');
+
+nodeCommand
+  .command('create <id>')
+  .description('创建节点')
+  .option('-n, --name <name>', '节点名称')
+  .option('-T, --type <type>', '节点类型', 'bot')
+  .option('-m, --metadata <json>', '元数据 (JSON)')
+  .action(async (id, options) => {
+    const spinner = ora('创建节点...').start();
+    try {
+      const result = await request('/nodes', {
+        method: 'POST',
+        body: JSON.stringify({
+          id,
+          name: options.name || id,
+          type: options.type,
+          metadata: options.metadata ? JSON.parse(options.metadata) : {}
+        })
+      });
+      spinner.succeed(chalk.green('✅ 节点创建成功'));
+      console.log(chalk.gray(`  ID: ${result.data.id}`));
+      console.log(chalk.gray(`  名称: ${result.data.name}`));
+      console.log(chalk.gray(`  类型: ${result.data.type}`));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 创建失败: ${error.message}`));
+    }
+  });
+
+nodeCommand
+  .command('list')
+  .description('列出所有节点')
+  .alias('ls')
+  .action(async () => {
+    const spinner = ora('加载节点列表...').start();
+    try {
+      const result = await request('/nodes');
+      spinner.succeed();
+      
+      if (result.data.length === 0) {
+        console.log(chalk.yellow('  暂无节点'));
+        return;
+      }
+
+      console.log(chalk.cyan(`\n  📋 节点列表 (${result.data.length} 个):\n`));
+
+      // 按类型分组
+      const grouped = {};
+      result.data.forEach(node => {
+        if (!grouped[node.type]) grouped[node.type] = [];
+        grouped[node.type].push(node);
+      });
+
+      const typeEmojis = { bot: '🤖', human: '👤', device: '📱', org: '🏢', system: '⚙️' };
+
+      for (const [type, nodes] of Object.entries(grouped)) {
+        console.log(chalk.cyan(`  ${typeEmojis[type] || '📦'} ${type.toUpperCase()}`));
+        nodes.forEach(node => {
+          console.log(chalk.gray(`    • ${node.id} (${node.name})`));
+        });
+        console.log();
+      }
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 加载失败: ${error.message}`));
+    }
+  });
+
+nodeCommand
+  .command('get <id>')
+  .description('查看节点详情')
+  .action(async (id) => {
+    const spinner = ora('加载节点详情...').start();
+    try {
+      const result = await request(`/nodes/${id}`);
+      spinner.succeed();
+
+      console.log(chalk.cyan('\n  📄 节点详情:\n'));
+      console.log(chalk.gray(`  ID:     ${result.data.id}`));
+      console.log(chalk.gray(`  名称:   ${result.data.name}`));
+      console.log(chalk.gray(`  类型:   ${result.data.type}`));
+      console.log(chalk.gray(`  创建:   ${new Date(result.data.createdAt).toLocaleString()}`));
+      
+      if (result.data.metadata && Object.keys(result.data.metadata).length > 0) {
+        console.log(chalk.cyan('\n  元数据:'));
+        console.log(chalk.gray(JSON.stringify(result.data.metadata, null, 4)));
+      }
+      console.log();
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 加载失败: ${error.message}`));
+    }
+  });
+
+nodeCommand
+  .command('delete <id>')
+  .description('删除节点')
+  .alias('rm')
+  .option('-f, --force', '强制删除，无需确认')
+  .action(async (id, options) => {
+    if (!options.force) {
+      const { confirm } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirm',
+          message: `确定删除节点 "${id}"?`,
+          default: false
+        }
+      ]);
+      if (!confirm) {
+        console.log(chalk.yellow('\n  操作已取消'));
+        return;
+      }
+    }
+
+    const spinner = ora('删除节点...').start();
+    try {
+      await request(`/nodes/${id}`, { method: 'DELETE' });
+      spinner.succeed(chalk.green(`✅ 节点已删除: ${id}`));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 删除失败: ${error.message}`));
+    }
+  });
+
+nodeCommand
+  .command('export [file]')
+  .description('导出节点到文件')
+  .action(async (file) => {
+    const filename = file || `clawnet-nodes-${Date.now()}.json`;
+    const spinner = ora('导出节点...').start();
+    try {
+      const result = await request('/nodes');
+      fs.writeFileSync(filename, JSON.stringify(result.data, null, 2));
+      spinner.succeed(chalk.green(`✅ 已导出到 ${filename}`));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 导出失败: ${error.message}`));
+    }
+  });
+
+// ========== 关系管理命令 ==========
+const relationCommand = program.command('relation')
+  .description('🔗 关系管理')
+  .alias('relations');
+
+relationCommand
+  .command('create <from> <to>')
+  .description('创建关系')
+  .option('-t, --type <type>', '关系类型', 'observe')
+  .option('-p, --perms <perms>', '权限 (逗号分隔)', 'read')
+  .option('--ttl <seconds>', '临时关系有效期（秒）')
+  .action(async (from, to, options) => {
+    const spinner = ora('创建关系...').start();
+    try {
+      const body = {
+        from,
+        to,
+        type: options.type,
+        permissions: options.perms.split(',').map(p => p.trim())
+      };
+
+      if (options.ttl) {
+        body.ttl = parseInt(options.ttl) * 1000;
+        body.isTemporary = true;
+      }
+
+      const result = await request('/relations', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+
+      spinner.succeed(chalk.green('✅ 关系创建成功'));
+      console.log(chalk.gray(`  ${result.data.from} → ${result.data.to}`));
+      console.log(chalk.gray(`  类型: ${result.data.type}`));
+      console.log(chalk.gray(`  权限: ${result.data.permissions.join(', ')}`));
+      if (options.ttl) {
+        console.log(chalk.yellow(`  有效期: ${options.ttl} 秒`));
+      }
+      console.log();
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 创建失败: ${error.message}`));
+    }
+  });
+
+relationCommand
+  .command('list')
+  .description('列出所有关系')
+  .alias('ls')
+  .action(async () => {
+    const spinner = ora('加载关系列表...').start();
+    try {
+      const result = await request('/relations');
+      spinner.succeed();
+
+      if (result.data.length === 0) {
+        console.log(chalk.yellow('\n  暂无关系'));
+        return;
+      }
+
+      console.log(chalk.cyan(`\n  🔗 关系列表 (${result.data.length} 个):\n`));
+
+      result.data.forEach(rel => {
+        const status = rel.isTemporary ?
+          chalk.yellow(`(临时, ${Math.round((rel.expiresAt - Date.now()) / 1000)}s)`) :
+          chalk.green('(永久)');
+        
+        console.log(chalk.gray(`  • ${rel.from} → ${rel.to} ${status}`));
+        console.log(chalk.gray(`    类型: ${rel.type} | 权限: ${rel.permissions.join(', ')}`));
+        console.log();
+      });
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 加载失败: ${error.message}`));
+    }
+  });
+
+relationCommand
+  .command('cleanup')
+  .description('清理过期关系')
+  .action(async () => {
+    const spinner = ora('清理过期关系...').start();
+    try {
+      const result = await request('/relations/cleanup', { method: 'POST' });
+      spinner.succeed(chalk.green(`✅ 已清理 ${result.data.cleaned} 个过期关系`));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 清理失败: ${error.message}`));
+    }
+  });
+
+// ========== 权限命令 ==========
+program
+  .command('check <node> <target> <action>')
+  .description('🔐 检查权限')
+  .action(async (node, target, action) => {
+    const spinner = ora('检查权限...').start();
+    try {
+      const result = await request(
+        `/permissions/check?node=${node}&target=${target}&action=${action}`
+      );
+      spinner.succeed();
+
+      const icon = result.data.allowed ? '✅' : '❌';
+      console.log(chalk.cyan(`\n  ${icon} 权限检查:`));
+      console.log(chalk.gray(`  ${result.data.node} → ${result.data.target}`));
+      console.log(chalk.gray(`  操作: ${result.data.action}`));
+      console.log(chalk.gray(`  结果: ${result.data.allowed ? '允许' : '拒绝'}\n`));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 检查失败: ${error.message}`));
+    }
+  });
+
+// ========== 服务管理命令 ==========
+program
+  .command('health')
+  .description('📊 系统健康检查')
+  .action(async () => {
+    const spinner = ora('检查系统状态...').start();
+    try {
+      const result = await request('/health');
+      spinner.succeed();
+
+      console.log(chalk.cyan('\n  📊 系统状态:\n'));
+      console.log(chalk.gray(`  状态: ${result.status}`));
+      console.log(chalk.cyan('\n  功能:'));
+      console.log(chalk.gray(`  REST API:  ${result.features.rest ? '✅' : '❌'}`));
+      console.log(chalk.gray(`  WebSocket: ${result.features.websocket ? '✅' : '❌'}`));
+      console.log(chalk.gray(`  认证:      ${result.features.auth ? '✅' : '❌'}`));
+      console.log(chalk.cyan('\n  统计:'));
+      console.log(chalk.gray(`  节点数:    ${result.stats.nodes}`));
+      console.log(chalk.gray(`  关系数:    ${result.stats.relations}`));
+      console.log(chalk.gray(`  WS 连接:   ${result.stats.wsConnections}\n`));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 连接失败: ${error.message}`));
+      console.log(chalk.yellow('\n  💡 请确保 ClawNet 服务正在运行: npm start\n'));
+    }
+  });
+
+program
+  .command('token')
+  .description('🔑 生成 API Token')
+  .action(async () => {
+    const spinner = ora('生成 Token...').start();
+    try {
+      const result = await request('/tokens', { method: 'POST' });
+      spinner.succeed();
+
+      console.log(chalk.cyan('\n  🔑 新 Token:\n'));
+      console.log(chalk.gray(`  ${result.data.token}\n`));
+      console.log(chalk.cyan('  使用方式:'));
+      console.log(chalk.gray('  export CLAWNET_TOKEN="' + result.data.token + '"\n'));
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 生成失败: ${error.message}`));
+    }
+  });
+
+// ========== 配置管理命令 ==========
+const configCommand = program.command('config')
+  .description('⚙️  配置管理');
+
+configCommand
+  .command('set <key> <value>')
+  .description('设置配置')
+  .action((key, value) => {
+    config[key] = value;
+    saveConfig(config);
+    console.log(chalk.green(`\n  ✅ 已设置 ${key} = ${value}\n`));
+  });
+
+configCommand
+  .command('get <key>')
+  .description('获取配置')
+  .action((key) => {
+    const value = config[key];
+    if (value) {
+      console.log(chalk.cyan(`\n  ${key} = ${value}\n`));
+    } else {
+      console.log(chalk.yellow(`\n  配置项 "${key}" 未设置\n`));
+    }
+  });
+
+configCommand
+  .command('list')
+  .description('查看所有配置')
+  .action(() => {
+    console.log(chalk.cyan('\n  📋 当前配置:\n'));
+    if (Object.keys(config).length === 0) {
+      console.log(chalk.yellow('  暂无配置'));
+    } else {
+      for (const [key, value] of Object.entries(config)) {
+        console.log(chalk.gray(`  ${key} = ${value}`));
+      }
+    }
+    console.log();
+  });
+
+configCommand
+  .command('url [url]')
+  .description('设置/查看服务器地址')
+  .action((url) => {
+    if (url) {
+      config.url = url;
+      saveConfig(config);
+      console.log(chalk.green(`\n  ✅ 服务器地址已设置为: ${url}\n`));
+    } else {
+      console.log(chalk.cyan(`\n  服务器地址: ${config.url || CLAWNET_URL}\n`));
+    }
+  });
+
+// ========== 交互式命令 ==========
+program
+  .command('interactive')
+  .description('🎮 启动交互式 CLI')
+  .alias('i')
+  .action(() => {
+    require('./clawnet-interactive');
+  });
+
+// ========== 初始化命令 ==========
+program
+  .command('init')
+  .description('🚀 初始化配置')
+  .action(async () => {
+    showBanner();
+    
+    const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'url',
+        message: 'ClawNet 服务器地址:',
+        default: CLAWNET_URL
+      },
+      {
+        type: 'password',
+        name: 'token',
+        message: 'API Token:',
+        mask: '*'
+      }
+    ]);
+
+    saveConfig(answers);
+    console.log(chalk.green('\n  ✅ 配置已保存\n'));
+  });
+
+// ========== 在线节点命令 ==========
+program
+  .command('online')
+  .description('📡 查看在线节点')
+  .action(async () => {
+    const spinner = ora('获取在线节点...').start();
+    try {
+      const result = await request('/ws/online');
+      spinner.succeed();
+
+      if (result.data.length === 0) {
+        console.log(chalk.yellow('\n  暂无在线节点\n'));
+        return;
+      }
+
+      console.log(chalk.cyan(`\n  📡 在线节点 (${result.data.length} 个):\n`));
+      result.data.forEach(node => {
+        console.log(chalk.gray(`  • ${node}`));
+      });
+      console.log();
+    } catch (error) {
+      spinner.fail(chalk.red(`❌ 获取失败: ${error.message}`));
+    }
+  });
+
+// ========== 快速操作命令 ==========
+program
+  .command('quick')
+  .description('⚡ 快速操作')
+  .action(async () => {
+    const { action } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'action',
+        message: '选择操作:',
+        choices: [
+          { name: '📦 创建节点', value: 'create-node' },
+          { name: '🔗 创建关系', value: 'create-relation' },
+          { name: '📊 系统状态', value: 'health' },
+          { name: '🔑 生成 Token', value: 'token' },
+          { name: '📡 在线节点', value: 'online' },
+          new inquirer.Separator(),
+          { name: '❌ 退出', value: 'exit' }
+        ]
+      }
+    ]);
+
+    switch (action) {
+      case 'create-node':
+        // 调用创建节点逻辑
+        break;
+      case 'health':
+        program.parse(['node', 'health']);
+        break;
+      // ... 其他操作
+    }
+  });
+
+// ========== 帮助增强 ==========
+program
+  .command('docs')
+  .description('📚 打开文档')
+  .action(() => {
+    console.log(chalk.cyan('\n  📚 ClawNet 文档:\n'));
+    console.log(chalk.gray('  GitHub:  https://github.com/Bsheepcoder/ClawNet'));
+    console.log(chalk.gray('  CLI 指南: https://github.com/Bsheepcoder/ClawNet/blob/main/CLI-GUIDE.md'));
+    console.log(chalk.gray('  更新日志: https://github.com/Bsheepcoder/ClawNet/blob/main/CHANGELOG.md\n'));
+  });
+
+// 主程序
+program.parse();
