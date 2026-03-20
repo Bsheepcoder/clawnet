@@ -4,6 +4,8 @@
 
 **🤖 关系驱动的多节点智能协作网络**
 
+[![npm version](https://badge.fury.io/js/@husile%2Fclawnet.svg)](https://www.npmjs.com/package/@husile/clawnet)
+[![npm downloads](https://img.shields.io/npm/dm/@husile/clawnet.svg)](https://www.npmjs.com/package/@husile/clawnet)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org)
 
@@ -41,11 +43,18 @@ ClawNet 是一个基于关系网络的多节点智能协作系统，支持：
 ### 安装
 
 ```bash
-# 克隆仓库
+# 使用 npm 安装（推荐）
+npm install @husile/clawnet
+
+# 或使用 yarn
+yarn add @husile/clawnet
+
+# 或使用 pnpm
+pnpm add @husile/clawnet
+
+# 或克隆仓库
 git clone https://github.com/Bsheepcoder/clawnet.git
 cd clawnet
-
-# 安装依赖
 npm install
 
 # 编译项目
