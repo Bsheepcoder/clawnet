@@ -1,8 +1,8 @@
-# ClawNet MVP
+# ClawNet
 
 <div align="center">
 
-**🤖 关系驱动的多节点智能协作网络**
+**🤖 Relation-Driven Multi-Node Intelligent Collaboration Network**
 
 [![npm version](https://badge.fury.io/js/@husile%2Fclawnet.svg)](https://www.npmjs.com/package/@husile/clawnet)
 [![npm downloads](https://img.shields.io/npm/dm/@husile/clawnet.svg)](https://www.npmjs.com/package/@husile/clawnet)
@@ -13,24 +13,24 @@
 
 ---
 
-## 📖 项目简介
+## 📖 Overview
 
-ClawNet 是一个基于关系网络的多节点智能协作系统，支持：
-- 多平台消息路由（微信、Telegram等）
-- 节点关系管理与权限控制
-- 智能消息分发与处理
-- 灵活的插件式架构
+ClawNet is a multi-node intelligent collaboration system based on relation networks, featuring:
+- Multi-platform message routing (WeChat, Telegram, etc.)
+- Node relationship management and permission control
+- Intelligent message distribution and processing
+- Flexible plugin architecture
 
-## 🚀 核心特性
+## 🚀 Key Features
 
-- ✅ 多平台适配器（微信公众号、Telegram Bot）
-- ✅ 关系网络拓扑管理
-- ✅ 基于角色的权限控制
-- ✅ WebSocket 实时通信
-- ✅ SQLite 本地存储
-- ✅ 可扩展的插件系统
+- ✅ Multi-platform adapters (WeChat Official Account, Telegram Bot)
+- ✅ Relation graph topology management
+- ✅ Role-based permission control
+- ✅ WebSocket real-time communication
+- ✅ SQLite local storage
+- ✅ Extensible plugin system
 
-## 🛠️ 技术栈
+## 🛠️ Tech Stack
 
 - **Runtime:** Node.js 20+
 - **Framework:** Express.js
@@ -38,130 +38,127 @@ ClawNet 是一个基于关系网络的多节点智能协作系统，支持：
 - **Language:** TypeScript
 - **Protocol:** WebSocket, HTTP
 
-## 📦 快速开始
-
-### 安装
+## 📦 Installation
 
 ```bash
-# 使用 npm 安装（推荐）
+# Using npm (recommended)
 npm install @husile/clawnet
 
-# 或使用 yarn
+# Using yarn
 yarn add @husile/clawnet
 
-# 或使用 pnpm
+# Using pnpm
 pnpm add @husile/clawnet
 
-# 或克隆仓库
-git clone https://github.com/Bsheepcoder/clawnet.git
-cd clawnet
+# Or clone the repository
+git clone https://github.com/Bsheepcoder/ClawNet.git
+cd ClawNet
 npm install
-
-# 编译项目
-npm run build
 ```
 
-### 配置
+## ⚙️ Configuration
 
-项目不包含任何配置文件，你需要根据实际需求创建配置：
-
-**方式1：环境变量**
+**Method 1: Environment Variables**
 ```bash
 export PORT=3000
 export HOST=0.0.0.0
 npm start
 ```
 
-**方式2：.env 文件（推荐）**
+**Method 2: .env File (Recommended)**
 ```bash
-# 创建 .env 文件
+# Create .env file
 cat > .env << EOF
 PORT=3000
 HOST=0.0.0.0
 EOF
 
-# 启动
+# Start the server
 npm start
 ```
 
-### 运行
+## 📁 Project Structure
+
+```
+ClawNet/
+├── dist/              # Compiled JavaScript
+├── src/               # TypeScript source code
+│   ├── adapters/      # Platform adapters
+│   ├── index.ts       # Entry point
+│   ├── server.ts      # HTTP server
+│   ├── websocket.ts   # WebSocket server
+│   ├── graph.ts       # Relation graph
+│   ├── permission.ts  # Permission management
+│   └── ...
+├── bin/               # Executable files
+├── cli/               # CLI tools
+├── skill/             # OpenClaw skill integration
+├── scripts/           # Utility scripts
+└── package.json
+```
+
+## 🚀 Quick Start
+
+### Build & Run
 
 ```bash
-# 开发模式
+# Development mode
 npm run dev
 
-# 生产模式
+# Production mode
 npm run build
 npm start
+
+# Or use the start script
+./start.sh
 ```
 
-## 📁 项目结构
+### Usage Example
 
-```
-clawnet/
-├── src/              # 源代码
-│   ├── adapters/     # 平台适配器
-│   ├── index.ts      # 入口文件
-│   ├── server.ts     # HTTP服务器
-│   ├── websocket.ts  # WebSocket服务
-│   ├── graph.ts      # 关系图
-│   ├── permission.ts # 权限管理
-│   └── ...
-├── bin/              # 可执行文件
-├── cli/              # CLI工具
-├── skill/            # 技能模块（OpenClaw插件）
-├── scripts/          # 工具脚本
-└── dist/             # 编译输出
-```
+```javascript
+const { Graph, Node } = require('@husile/clawnet');
 
-## 🔧 使用示例
-
-### 基础用法
-
-```typescript
-import { Graph, Node } from 'clawnet-mvp';
-
-// 创建关系图
+// Create a relation graph
 const graph = new Graph();
 
-// 添加节点
+// Add nodes
 const alice = graph.addNode('alice', { name: 'Alice', role: 'admin' });
 const bob = graph.addNode('bob', { name: 'Bob', role: 'user' });
 
-// 建立关系
+// Establish relationship
 graph.addRelation(alice, bob, 'friend');
 
-// 发送消息
+// Send message
 graph.sendMessage(alice, bob, 'Hello, Bob!');
 ```
 
-### 集成到 OpenClaw
+### Integration with OpenClaw
 
-详见 [skill/SKILL.md](skill/SKILL.md)
+See [skill/SKILL.md](skill/SKILL.md) for details.
 
-## 🌐 API 文档
+## 🌐 API Documentation
 
 ### HTTP API
 
 ```
-GET  /health          # 健康检查
-POST /message         # 发送消息
-GET  /nodes           # 获取节点列表
-GET  /relations       # 获取关系列表
+GET  /health          # Health check
+POST /message         # Send message
+GET  /nodes           # Get node list
+GET  /relations       # Get relation list
 ```
 
 ### WebSocket API
 
 ```javascript
-// 连接
+// Connect
 const ws = new WebSocket('ws://localhost:3000/ws');
 
-// 监听消息
+// Listen for messages
 ws.onmessage = (event) => {
   console.log('Received:', event.data);
 };
 
-// 发送消息
+// Send message
 ws.send(JSON.stringify({
   type: 'message',
   from: 'alice',
@@ -170,52 +167,88 @@ ws.send(JSON.stringify({
 }));
 ```
 
-## 🔒 安全性
+## 🔒 Security
 
-**重要提示：**
-- 本项目**不包含任何配置文件或密钥**
-- 所有敏感信息需要用户自行配置
-- 请勿将 `.env` 文件提交到版本控制
-- 生产环境请使用环境变量或密钥管理服务
+**Important:**
+- This project **does not include any configuration files or credentials**
+- All sensitive information must be configured by the user
+- Do **not** commit `.env` files to version control
+- Use environment variables or secret management services in production
 
-## 🧪 测试
+## 🧪 Testing
 
 ```bash
-# 运行测试
+# Run tests
 npm test
 ```
 
-## 📄 许可证
+## 📄 License
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+MIT License - See [LICENSE](LICENSE) file for details
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-### 贡献指南
+### Development Setup
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## 📮 联系方式
+## 📊 Project Status
 
-- GitHub: [@Bsheepcoder](https://github.com/Bsheepcoder)
-- Project Link: [https://github.com/Bsheepcoder/clawnet](https://github.com/Bsheepcoder/clawnet)
+- ✅ Version: 0.5.0
+- ✅ Status: Active Development
+- ✅ Node.js: >=20.0.0
+- ✅ License: MIT
 
-## 🙏 致谢
+## 📝 Changelog
 
-- OpenClaw - AI Agent Framework
-- Express.js - Web Framework
-- Better-SQLite3 - SQLite Database
+See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
+
+## 📮 Contact & Support
+
+- **GitHub:** [@Bsheepcoder](https://github.com/Bsheepcoder)
+- **Project:** [https://github.com/Bsheepcoder/ClawNet](https://github.com/Bsheepcoder/ClawNet)
+- **Issues:** [https://github.com/Bsheepcoder/ClawNet/issues](https://github.com/Bsheepcoder/ClawNet/issues)
+- **npm:** [https://www.npmjs.com/package/@husile/clawnet](https://www.npmjs.com/package/@husile/clawnet)
+
+## 🙏 Acknowledgments
+
+- [OpenClaw](https://github.com/openclaw) - AI Agent Framework
+- [Express.js](https://expressjs.com/) - Web Framework
+- [Better-SQLite3](https://github.com/WiseLibs/better-sqlite3) - SQLite Database
 
 ---
 
 <div align="center">
 
-**⭐ 如果这个项目对你有帮助，请给一个 Star！**
+**⭐ If this project helps you, please give it a star! ⭐**
+
+**🤝 Contributions, issues, and feature requests are welcome!**
+
+</div>
+
+---
+
+## 📋 Quick Reference
+
+| Item | Value |
+|------|-------|
+| **Package Name** | @husile/clawnet |
+| **Current Version** | 0.5.0 |
+| **Node.js** | >= 20.0.0 |
+| **License** | MIT |
+| **Repository** | [GitHub](https://github.com/Bsheepcoder/ClawNet) |
+| **npm** | [npmjs.com](https://www.npmjs.com/package/@husile/clawnet) |
+
+---
+
+<div align="center">
+
+**Built with ❤️ by the ClawNet Team**
 
 </div>

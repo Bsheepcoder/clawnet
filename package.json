@@ -42,12 +42,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Bsheepcoder/clawnet.git"
+    "url": "https://github.com/Bsheepcoder/ClawNet.git"
   },
   "bugs": {
-    "url": "https://github.com/Bsheepcoder/clawnet/issues"
+    "url": "https://github.com/Bsheepcoder/ClawNet/issues"
   },
-  "homepage": "https://github.com/Bsheepcoder/clawnet#readme",
+  "homepage": "https://github.com/Bsheepcoder/ClawNet#readme",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/cors": "^2.8.0",

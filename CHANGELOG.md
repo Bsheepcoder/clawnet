@@ -1,33 +1,72 @@
-# 📝 Change Log
+# Changelog
+
+All notable changes to this project will be documented in this file.
 
 ## [0.5.0] - 2026-03-20
 
 ### Added
-- 📚 Complete README.md with proper npm documentation
-- 📚 Added CHANGELOG.md
-- 📚 Optimized package.json for npm publishing
-- 📚 Added .npmignore file
-- 📚 Fixed import paths
-
-### Changed
-- 📝 README.md is now more professional and user-friendly
-- 📝 package.json has better description and keywords
-
-### Improved
-- 📝 Configuration examples are clearer
-- 📝 Build process is more robust
-- 📝 Documentation is more comprehensive
+- 🎉 **First npm release**
+- 📦 Multi-platform adapters (WeChat, Telegram)
+- 📦 Relation graph management
+- 📦 Permission control system
+- 📦 WebSocket real-time communication
+- 📦 SQLite local storage
+- 📦 Extensible plugin system
+- 📦 CLI tools
+- 📦 OpenClaw skill integration
+- 📚 Complete README documentation
+- 📚 MIT LICENSE
+- 📚 CHANGELOG.md
 
 ### Security
-- 🔒 All sensitive information remains in .gitignore
-- 🔒 No credentials in source code
-- 🔒 No database files included
+- 🔒 Removed all sensitive credentials
+- 🔒 Added .gitignore for user configs
+- 🔒 Added .env.example templates
+- 🔒 No hardcoded credentials
 
-### Next Steps
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
-- See [README.md](README.md) for usage examples
-- Report issues at [GitHub Issues](https://github.com/clawnet-mvp/issues)
+### Improvements
+- 📝 Comprehensive documentation
+- 📝 Clean codebase
+- 📝 Easy to use API
+- 📝 Full TypeScript support
+
+### Technical Details
+- ✅ 51 files included
+- ✅ 130.9 KB unpacked size
+- ✅ 33.0 KB package size
+- ✅ Full TypeScript definitions
+- ✅ MIT License
+
+## [0.4.1] - 2026-03-17
+
+### Fixed
+- Bug fixes and performance improvements
+- Minor UI improvements
+
+## [0.4.0] - 2026-03-16
+
+### Added
+- WeChat integration
+- Message storage
+- Auto-reply feature
+
+## [0.3.0] - 2026-03-14
+
+### Added
+- Initial MVP release
+- Basic routing system
+- Permission management
+- Graph structure
 
 ---
 
-**ClawNet MVP** - 关系驱动的多节点智能协作网络
+## Release Links
+
+- [v0.5.0](https://github.com/Bsheepcoder/ClawNet/releases/tag/v0.5.0) - First npm release
+- [v0.4.1](https://github.com/Bsheepcoder/ClawNet/releases/tag/v0.4.1) - Bug fixes
+- [v0.4.0](https://github.com/Bsheepcoder/ClawNet/releases/tag/v0.4.0) - WeChat integration
+- [v0.3.0](https://github.com/Bsheepcoder/ClawNet/releases/tag/v0.3.0) - Initial release
+
+---
+
+**For more details, see the [GitHub Releases](https://github.com/Bsheepcoder/ClawNet/releases) page.**
