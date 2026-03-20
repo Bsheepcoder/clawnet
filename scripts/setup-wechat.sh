@@ -5,12 +5,16 @@
 echo "🔧 配置微信环境变量"
 echo ""
 
-# 设置环境变量
-export WECHAT_APPID="wxd213e22f3178383b"
-export WECHAT_APPSECRET="5664bceb1f6db3ed3609813e304d1bcd"
-export WECHAT_TOKEN="clawnet"
-export WECHAT_ENCODING_AES_KEY="xHzdvi3xjZLXUetUadtlyFM1h9epCkGJswIUbdd8Z0k"
+# 提示用户输入配置
+echo "请输入微信配置信息："
+echo ""
+read -p "WECHAT_APPID: " WECHAT_APPID
+read -p "WECHAT_APPSECRET: " WECHAT_APPSECRET
+read -p "WECHAT_TOKEN (默认: clawnet): " WECHAT_TOKEN
+WECHAT_TOKEN=${WECHAT_TOKEN:-clawnet}
+read -p "WECHAT_ENCODING_AES_KEY: " WECHAT_ENCODING_AES_KEY
 
+echo ""
 echo "✅ 环境变量已设置："
 echo ""
 echo "   WECHAT_APPID:             $WECHAT_APPID"
@@ -21,6 +25,7 @@ echo ""
 
 # 写入 .env 文件
 cat > .env << EOF
+# 微信配置
 WECHAT_APPID=$WECHAT_APPID
 WECHAT_APPSECRET=$WECHAT_APPSECRET
 WECHAT_TOKEN=$WECHAT_TOKEN

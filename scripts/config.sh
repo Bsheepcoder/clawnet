@@ -59,17 +59,19 @@ case "$1" in
   
   wechat)
     echo "💬 微信公众号配置（80端口）"
+    echo "⚠️  请确保已在 .env 文件中配置以下变量："
+    echo "   - WECHAT_APPID"
+    echo "   - WECHAT_APPSECRET"
+    echo "   - WECHAT_TOKEN"
+    echo "   - WECHAT_ENCODING_AES_KEY"
+    echo ""
     export PORT=80
     export HOST=0.0.0.0
-    export WECHAT_APPID="wxd213e22f3178383b"
-    export WECHAT_APPSECRET="5664bceb1f6db3ed3609813e304d1bcd"
-    export WECHAT_TOKEN="clawnet"
-    export WECHAT_ENCODING_AES_KEY="xHzdvi3xjZLXUetUadtlyFM1h9epCkGJswIUbdd8Z0k"
+    load_config
     show_config
     echo ""
     echo "启动命令: sudo -E npm start"
-    echo "微信URL: http://192.163.174.25/wechat/mp/message"
-    echo "微信Token: clawnet"
+    echo "微信URL: http://your-server-ip/wechat/mp/message"
     ;;
   
   custom)
@@ -92,7 +94,7 @@ case "$1" in
     echo "  show           - 显示当前配置"
     echo "  dev            - 开发环境（3000端口）"
     echo "  prod           - 生产环境（80端口）"
-    echo "  wechat         - 微信配置（80端口+微信凭证）"
+    echo "  wechat         - 微信配置（从 .env 加载）"
     echo "  custom <port>  - 自定义端口"
     echo ""
     echo "示例："
