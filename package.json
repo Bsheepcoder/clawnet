@@ -1,6 +1,6 @@
 {
   "name": "@husile/clawnet",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "description": "关系驱动的多节点智能协作网络 - Multi-node intelligent collaboration network based on relation graph",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
