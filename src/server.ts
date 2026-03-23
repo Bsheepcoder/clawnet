@@ -738,6 +738,9 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
     const { spawn } = require('child_process');
     const sessionId = `wechat-login-${instanceName}-${Date.now()}`;
     
+    console.log(`[wechat-login] Starting login for instance: ${instanceName}`);
+    console.log(`[wechat-login] Session ID: ${sessionId}`);
+    
     res.json({
       success: true,
       data: {
@@ -748,12 +751,15 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
     });
     
     // 异步执行命令
+    console.log(`[wechat-login] Spawning command: openclaw --profile ${instanceName} channels login --channel openclaw-weixin`);
+    
     const child = spawn('openclaw', [
       '--profile', instanceName,
       'channels', 'login',
       '--channel', 'openclaw-weixin'
     ], {
-      cwd: process.env.HOME
+      cwd: process.env.HOME || '/root',
+      env: { ...process.env, TERM: 'xterm-256color' }
     });
     
     let output = '';
@@ -761,6 +767,7 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
     child.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       output += text;
+      console.log(`[wechat-login][stdout] ${text.trim()}`);
       
       // 通过WebSocket推送输出
       wsService.broadcast({
@@ -771,9 +778,10 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
         timestamp: Date.now()
       });
       
-      // 检查是否包含二维码URL
-      const qrUrlMatch = text.match(/https?:\/\/[^\s]+?(?:qr|login)[^\s]*/i);
+      // 检查是否包含二维码URL（匹配微信的URL格式）
+      const qrUrlMatch = text.match(/https?:\/\/[^\s]+?(?:liteapp\.weixin\.qq\.com|qr|login)[^\s]*/i);
       if (qrUrlMatch) {
+        console.log(`[wechat-login] QR code URL detected: ${qrUrlMatch[0]}`);
         wsService.broadcast({
           type: 'wechat:login:qrcode',
           sessionId,
@@ -787,6 +795,7 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
     child.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
       output += text;
+      console.error(`[wechat-login][stderr] ${text.trim()}`);
       
       wsService.broadcast({
         type: 'wechat:login:output',
@@ -795,9 +804,23 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
         output: text,
         timestamp: Date.now()
       });
+      
+      // stderr 也可能包含二维码URL
+      const qrUrlMatch = text.match(/https?:\/\/[^\s]+?(?:liteapp\.weixin\.qq\.com|qr|login)[^\s]*/i);
+      if (qrUrlMatch) {
+        console.log(`[wechat-login] QR code URL detected in stderr: ${qrUrlMatch[0]}`);
+        wsService.broadcast({
+          type: 'wechat:login:qrcode',
+          sessionId,
+          instance: instanceName,
+          qrUrl: qrUrlMatch[0],
+          timestamp: Date.now()
+        });
+      }
     });
     
     child.on('close', (code: number) => {
+      console.log(`[wechat-login] Command completed with code: ${code}`);
       wsService.broadcast({
         type: 'wechat:login:complete',
         sessionId,
@@ -809,6 +832,7 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
     });
     
     child.on('error', (error: Error) => {
+      console.error(`[wechat-login] Command error: ${error.message}`);
       wsService.broadcast({
         type: 'wechat:login:error',
         sessionId,
@@ -819,6 +843,7 @@ app.post('/instances/:name/wechat/login', async (req: Request, res: Response) =>
     });
     
   } catch (error: any) {
+    console.error(`[wechat-login] Exception: ${error.message}`);
     res.status(500).json({ 
       success: false, 
       error: error.message 
