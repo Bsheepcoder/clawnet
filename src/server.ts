@@ -16,7 +16,7 @@ import { WebSocketService } from './websocket';
 import { authMiddleware, generateToken } from './auth';
 import { WeChatAdapter, WeChatConfig, getWeChatConfig } from './adapters/wechat-adapter';
 import { InstanceManager, OpenClawInstance } from './instance-service';
-import { listInstances, getInstance, createInstance, startInstance, stopInstance, connectInstance } from './instance-service';
+import { listInstances, getInstance, createInstance, startInstance, stopInstance, connectInstance, deleteInstance } from './instance-service';
 
 const app = express();
 const server = createServer(app);
@@ -702,6 +702,21 @@ app.post('/instances/:name/stop', async (req: Request, res: Response) => {
 app.post('/instances/:name/connect', async (req: Request, res: Response) => {
   try {
     const result = await connectInstance(req.params.name, CLAWNET_URL);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 删除实例
+app.delete('/instances/:name', async (req: Request, res: Response) => {
+  try {
+    const result = await deleteInstance(req.params.name);
     
     if (result.success) {
       res.json({ success: true, message: result.message });

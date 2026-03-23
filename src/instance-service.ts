@@ -557,3 +557,7 @@ export async function stopInstance(name: string): Promise<{ success: boolean; me
 export async function connectInstance(name: string, clawnetUrl: string = 'http://localhost:3000'): Promise<{ success: boolean; message?: string }> {
   return await instanceManager.connectToClawnet(name, clawnetUrl);
 }
+
+export async function deleteInstance(name: string): Promise<{ success: boolean; message?: string }> {
+  return await instanceManager.deleteInstance(name);
+}
