@@ -271,7 +271,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
 - **GitHub:** [@Bsheepcoder](https://github.com/Bsheepcoder)
 - **Project:** [https://github.com/Bsheepcoder/ClawNet](https://github.com/Bsheepcoder/ClawNet)
 - **Issues:** [https://github.com/Bsheepcoder/ClawNet/issues](https://github.com/Bsheepcoder/ClawNet/issues)
-- **npm:** [https://www.npmjs.com/package/@husile/clawnet](https://www.npmjs.com/package/@husile/clawnet)
+- **npm:** [https://www.npmjs.com/package/@husile/clawnet-lite](https://www.npmjs.com/package/@husile/clawnet-lite)
 
 ## 🙏 Acknowledgments
 
@@ -295,12 +295,12 @@ See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
 
 | Item | Value |
 |------|-------|
-| **Package Name** | @husile/clawnet |
+| **Package Name** | @husile/clawnet-lite |
 | **Current Version** | 0.5.0 |
 | **Node.js** | >= 20.0.0 |
 | **License** | MIT |
 | **Repository** | [GitHub](https://github.com/Bsheepcoder/ClawNet) |
-| **npm** | [npmjs.com](https://www.npmjs.com/package/@husile/clawnet) |
+| **npm** | [npmjs.com](https://www.npmjs.com/package/@husile/clawnet-lite) |
 
 ---
 
