@@ -1,0 +1,738 @@
+#!/usr/bin/env node
+/**
+ * ClawNet CTL - Modern Control Interface
+ * OpenCode-style TUI Layout
+ */
+
+const chalk = require('chalk');
+const inquirer = require('inquirer');
+const ora = require('ora');
+const fs = require('fs');
+const path = require('path');
+
+const packageJson = require('../package.json');
+
+const CLAWNET_URL = process.env.CLAWNET_URL || 'http://localhost:3000';
+const CONFIG_FILE = path.join(process.env.HOME || process.env.USERPROFILE, '.clawnetrc');
+
+// ==================== UI Components ====================
+
+const UI = {
+  // 主题色
+  colors: {
+    primary: chalk.cyan,
+    success: chalk.green,
+    warning: chalk.yellow,
+    error: chalk.red,
+    muted: chalk.gray,
+    highlight: chalk.white.bold,
+    accent: chalk.magenta,
+  },
+  
+  // 宽度
+  width: 60,
+  
+  // 绘制分隔线
+  divider(char = '─', color = 'gray') {
+    console.log(chalk[color](char.repeat(this.width)));
+  },
+  
+  // 计算字符串显示宽度（中文算2个字符）
+  displayWidth(str) {
+    let width = 0;
+    for (const char of str) {
+      width += char.charCodeAt(0) > 127 ? 2 : 1;
+    }
+    return width;
+  },
+  
+  // 绘制区块标题
+  sectionHeader(title, emoji = '') {
+    const content = ` ${emoji} ${title}`;
+    const contentWidth = this.displayWidth(content);
+    const padding = Math.max(0, this.width - contentWidth - 2);
+    
+    console.log();
+    console.log(chalk.cyan.bold('┌' + '─'.repeat(this.width - 2) + '┐'));
+    console.log(chalk.cyan.bold('│') + 
+      chalk.white.bold(content) + 
+      ' '.repeat(padding) + 
+      chalk.cyan.bold('│'));
+    console.log(chalk.cyan.bold('├' + '─'.repeat(this.width - 2) + '┤'));
+  },
+  
+  // 绘制区块底部
+  sectionFooter() {
+    console.log(chalk.cyan.bold('└' + '─'.repeat(this.width - 2) + '┘'));
+  },
+  
+  // 绘制信息行
+  infoRow(label, value, status = null) {
+    const statusIcon = status === true ? '✓' : status === false ? '✗' : '';
+    const statusColor = status === true ? chalk.green : status === false ? chalk.red : chalk.gray;
+    
+    const content = chalk.gray(` ${label}: `) + 
+      chalk.white(value) +
+      (statusIcon ? statusColor(` ${statusIcon}`) : '');
+    
+    const contentWidth = this.displayWidth(` ${label}: ${value}`) + (statusIcon ? 2 : 0);
+    const padding = Math.max(0, this.width - contentWidth - 2);
+    
+    console.log(chalk.cyan.bold('│') + 
+      content +
+      ' '.repeat(padding) +
+      chalk.cyan.bold('│'));
+  },
+  
+  // 绘制空行
+  emptyRow() {
+    console.log(chalk.cyan.bold('│') + ' '.repeat(this.width - 2) + chalk.cyan.bold('│'));
+  },
+  
+  // 主横幅
+  banner() {
+    const version = `v${packageJson.version}`;
+    console.log();
+    console.log(chalk.cyan.bold('  ╔══════════════════════════════════════════════════════╗'));
+    console.log(chalk.cyan.bold('  ║                                                      ║'));
+    console.log(chalk.cyan.bold('  ║') + 
+      chalk.white.bold('        🐱  ClawNet CTL ' + version + ' '.repeat(36 - version.length)) + 
+      chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('  ║') + 
+      chalk.gray('        Relation-Driven Collaboration Network           ') + 
+      chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('  ║                                                      ║'));
+    console.log(chalk.cyan.bold('  ╚══════════════════════════════════════════════════════╝'));
+    console.log();
+  },
+  
+  // 状态指示器
+  statusBadge(text, type = 'info') {
+    const colors = {
+      info: chalk.bgBlue.white,
+      success: chalk.bgGreen.white,
+      warning: chalk.bgYellow.black,
+      error: chalk.bgRed.white,
+    };
+    return colors[type](` ${text} `);
+  },
+  
+  // 清屏
+  clear() {
+    console.clear();
+  }
+};
+
+// ==================== 配置管理 ====================
+
+const loadConfig = () => {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    }
+  } catch (error) {}
+  return {};
+};
+
+const saveConfig = (cfg) => {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+  } catch (error) {}
+};
+
+const config = loadConfig();
+const CLAWNET_TOKEN = process.env.CLAWNET_TOKEN || config.token || 'clawnet-secret-token';
+
+// ==================== API ====================
+
+async function request(endpoint, options = {}) {
+  const url = `${CLAWNET_URL}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${CLAWNET_TOKEN}`,
+    ...options.headers
+  };
+  const response = await fetch(url, { ...options, headers });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || response.statusText);
+  return result;
+}
+
+// ==================== 状态面板 ====================
+
+async function showStatusPanel() {
+  try {
+    const result = await request('/health');
+    
+    UI.sectionHeader('系统状态', '📊');
+    
+    UI.infoRow('服务状态', result.status === 'ok' ? '运行中' : '异常', result.status === 'ok');
+    UI.emptyRow();
+    UI.infoRow('节点数', String(result.stats.nodes));
+    UI.infoRow('关系数', String(result.stats.relations));
+    UI.infoRow('WS 连接', String(result.stats.wsConnections));
+    UI.emptyRow();
+    
+    UI.infoRow('REST API', result.features.rest ? '已启用' : '未启用', result.features.rest);
+    UI.infoRow('WebSocket', result.features.websocket ? '已启用' : '未启用', result.features.websocket);
+    UI.infoRow('认证系统', result.features.auth ? '已启用' : '未启用', result.features.auth);
+    
+    UI.sectionFooter();
+    
+    return result;
+  } catch (error) {
+    UI.sectionHeader('系统状态', '📊');
+    UI.infoRow('状态', '连接失败', false);
+    UI.infoRow('错误', error.message);
+    UI.sectionFooter();
+    return null;
+  }
+}
+
+// ==================== 在线面板 ====================
+
+async function showOnlinePanel() {
+  try {
+    const result = await request('/ws/online');
+    
+    UI.sectionHeader('在线节点', '📡');
+    
+    if (result.data.length === 0) {
+      UI.emptyRow();
+      UI.infoRow('状态', '暂无在线节点');
+      UI.emptyRow();
+    } else {
+      result.data.forEach((node, i) => {
+        UI.infoRow(`节点 ${i + 1}`, node);
+      });
+    }
+    
+    UI.sectionFooter();
+    
+    return result.data;
+  } catch (error) {
+    UI.sectionHeader('在线节点', '📡');
+    UI.infoRow('错误', error.message, false);
+    UI.sectionFooter();
+    return [];
+  }
+}
+
+// ==================== 主菜单 ====================
+
+async function mainMenu() {
+  UI.clear();
+  UI.banner();
+  
+  // 显示状态面板
+  const status = await showStatusPanel();
+  console.log();
+  
+  // 菜单选择
+  UI.sectionHeader('控制面板', '🎮');
+  UI.emptyRow();
+  
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: chalk.white('选择操作:'),
+      pageSize: 15,
+      loop: false,
+      prefix: '',
+      suffix: '',
+      styles: {
+        selected: (str) => chalk.cyan('► ') + chalk.white.bold(str),
+      },
+      choices: [
+        new inquirer.Separator(chalk.cyan('─── 📦 节点管理 ') + chalk.cyan('─'.repeat(30))),
+        { name: '  ➕  创建节点', value: 'create-node' },
+        { name: '  📋  查看节点列表', value: 'list-nodes' },
+        { name: '  🔍  查看节点详情', value: 'get-node' },
+        { name: '  🗑️   删除节点', value: 'delete-node' },
+        
+        new inquirer.Separator(chalk.cyan('─── 🔗 关系管理 ') + chalk.cyan('─'.repeat(30))),
+        { name: '  🔗  创建关系', value: 'create-relation' },
+        { name: '  📋  查看关系列表', value: 'list-relations' },
+        { name: '  🧹  清理过期关系', value: 'cleanup-relations' },
+        
+        new inquirer.Separator(chalk.cyan('─── 📊 系统管理 ') + chalk.cyan('─'.repeat(30))),
+        { name: '  📡  在线节点', value: 'list-online' },
+        { name: '  🔑  生成 Token', value: 'generate-token' },
+        { name: '  ⚙️   配置管理', value: 'config' },
+        
+        new inquirer.Separator(chalk.cyan('─'.repeat(50))),
+        { name: '  ❌  退出', value: 'exit' },
+      ]
+    }
+  ]);
+  
+  return action;
+}
+
+// ==================== 操作函数 ====================
+
+async function createNode() {
+  UI.clear();
+  UI.sectionHeader('创建节点', '➕');
+  UI.emptyRow();
+
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'id',
+      message: chalk.white('节点 ID:'),
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    },
+    {
+      type: 'input',
+      name: 'name',
+      message: chalk.white('节点名称:'),
+      default: (ans) => ans.id
+    },
+    {
+      type: 'list',
+      name: 'type',
+      message: chalk.white('节点类型:'),
+      choices: [
+        { name: '🤖  bot     - 机器人', value: 'bot' },
+        { name: '👤  human   - 人类', value: 'human' },
+        { name: '📱  device  - 设备', value: 'device' },
+        { name: '🏢  org     - 组织', value: 'org' },
+        { name: '⚙️   system  - 系统', value: 'system' },
+      ],
+      default: 'bot'
+    }
+  ]);
+
+  const spinner = ora({ text: '创建中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request('/nodes', {
+      method: 'POST',
+      body: JSON.stringify(answers)
+    });
+    spinner.succeed(chalk.green('创建成功'));
+    
+    console.log();
+    UI.sectionHeader('节点信息', '📄');
+    UI.infoRow('ID', result.data.id);
+    UI.infoRow('名称', result.data.name);
+    UI.infoRow('类型', result.data.type);
+    UI.sectionFooter();
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function listNodes() {
+  UI.clear();
+  UI.sectionHeader('节点列表', '📋');
+  UI.emptyRow();
+
+  const spinner = ora({ text: '加载中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request('/nodes');
+    spinner.succeed();
+
+    if (result.data.length === 0) {
+      UI.infoRow('状态', '暂无节点');
+      UI.sectionFooter();
+      await pressEnter();
+      return;
+    }
+
+    // 按类型分组
+    const grouped = {};
+    result.data.forEach(node => {
+      if (!grouped[node.type]) grouped[node.type] = [];
+      grouped[node.type].push(node);
+    });
+
+    const typeEmojis = { bot: '🤖', human: '👤', device: '📱', org: '🏢', system: '⚙️' };
+
+    UI.sectionFooter();
+    console.log();
+    
+    for (const [type, nodes] of Object.entries(grouped)) {
+      UI.sectionHeader(`${typeEmojis[type] || '📦'} ${type.toUpperCase()}`, '');
+      nodes.forEach((node, i) => {
+        UI.infoRow(node.id, node.name || '-');
+      });
+      UI.sectionFooter();
+      console.log();
+    }
+    
+    console.log(chalk.gray(`  共 ${result.data.length} 个节点`));
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function getNode() {
+  UI.clear();
+  UI.sectionHeader('节点详情', '🔍');
+  UI.emptyRow();
+
+  const { id } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'id',
+      message: chalk.white('节点 ID:'),
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    }
+  ]);
+
+  const spinner = ora({ text: '加载中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request(`/nodes/${id}`);
+    spinner.succeed();
+
+    console.log();
+    UI.sectionHeader('节点详情', '📄');
+    UI.infoRow('ID', result.data.id);
+    UI.infoRow('名称', result.data.name);
+    UI.infoRow('类型', result.data.type);
+    UI.infoRow('创建时间', new Date(result.data.createdAt).toLocaleString());
+    
+    if (result.data.metadata && Object.keys(result.data.metadata).length > 0) {
+      UI.emptyRow();
+      console.log(chalk.gray('  元数据:'));
+      console.log(chalk.gray(JSON.stringify(result.data.metadata, null, 4)));
+    }
+    
+    UI.sectionFooter();
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function deleteNode() {
+  UI.clear();
+  UI.sectionHeader('删除节点', '🗑️');
+  UI.emptyRow();
+
+  const { id } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'id',
+      message: chalk.white('节点 ID:'),
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    }
+  ]);
+
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: chalk.yellow(`确定删除节点 "${id}"?`),
+      default: false
+    }
+  ]);
+
+  if (!confirm) {
+    console.log(chalk.yellow('\n  已取消'));
+    await pressEnter();
+    return;
+  }
+
+  const spinner = ora({ text: '删除中...', color: 'cyan' }).start();
+
+  try {
+    await request(`/nodes/${id}`, { method: 'DELETE' });
+    spinner.succeed(chalk.green(`已删除: ${id}`));
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function createRelation() {
+  UI.clear();
+  UI.sectionHeader('创建关系', '🔗');
+  UI.emptyRow();
+
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'from',
+      message: chalk.white('源节点 ID:'),
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    },
+    {
+      type: 'input',
+      name: 'to',
+      message: chalk.white('目标节点 ID:'),
+      validate: (input) => input.length > 0 || 'ID 不能为空'
+    },
+    {
+      type: 'list',
+      name: 'type',
+      message: chalk.white('关系类型:'),
+      choices: [
+        { name: '👁️   observe     - 观察', value: 'observe' },
+        { name: '🔧  manage     - 管理', value: 'manage' },
+        { name: '🤝  collaborate - 协作', value: 'collaborate' },
+        { name: '📋  delegate    - 委托', value: 'delegate' },
+      ],
+      default: 'observe'
+    },
+    {
+      type: 'checkbox',
+      name: 'permissions',
+      message: chalk.white('权限:'),
+      choices: [
+        { name: '📖  read', value: 'read', checked: true },
+        { name: '✏️   write', value: 'write', checked: false },
+        { name: '🔐  admin', value: 'admin', checked: false }
+      ]
+    }
+  ]);
+
+  const spinner = ora({ text: '创建中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request('/relations', {
+      method: 'POST',
+      body: JSON.stringify(answers)
+    });
+    spinner.succeed(chalk.green('创建成功'));
+
+    console.log();
+    UI.sectionHeader('关系信息', '🔗');
+    UI.infoRow('源节点', result.data.from);
+    UI.infoRow('目标节点', result.data.to);
+    UI.infoRow('类型', result.data.type);
+    UI.infoRow('权限', result.data.permissions.join(', '));
+    UI.sectionFooter();
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function listRelations() {
+  UI.clear();
+  UI.sectionHeader('关系列表', '📋');
+  UI.emptyRow();
+
+  const spinner = ora({ text: '加载中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request('/relations');
+    spinner.succeed();
+
+    if (result.data.length === 0) {
+      UI.infoRow('状态', '暂无关系');
+      UI.sectionFooter();
+      await pressEnter();
+      return;
+    }
+
+    UI.sectionFooter();
+    console.log();
+
+    result.data.forEach((rel, i) => {
+      const status = rel.isTemporary 
+        ? chalk.yellow(`(临时, ${Math.round((rel.expiresAt - Date.now()) / 1000)}s)`)
+        : chalk.green('(永久)');
+      
+      console.log(chalk.cyan(`  ${i + 1}. ${rel.from} → ${rel.to}`) + ` ${status}`);
+      console.log(chalk.gray(`     类型: ${rel.type} | 权限: ${rel.permissions.join(', ')}`));
+      console.log();
+    });
+
+    console.log(chalk.gray(`  共 ${result.data.length} 个关系`));
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function cleanupRelations() {
+  UI.clear();
+  UI.sectionHeader('清理过期关系', '🧹');
+  UI.emptyRow();
+
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: chalk.white('确定清理所有过期关系?'),
+      default: true
+    }
+  ]);
+
+  if (!confirm) return;
+
+  const spinner = ora({ text: '清理中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request('/relations/cleanup', { method: 'POST' });
+    spinner.succeed(chalk.green(`已清理 ${result.data.cleaned} 个过期关系`));
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function listOnline() {
+  UI.clear();
+  await showOnlinePanel();
+  await pressEnter();
+}
+
+async function generateToken() {
+  UI.clear();
+  UI.sectionHeader('生成 Token', '🔑');
+  UI.emptyRow();
+
+  const spinner = ora({ text: '生成中...', color: 'cyan' }).start();
+
+  try {
+    const result = await request('/tokens', { method: 'POST' });
+    spinner.succeed(chalk.green('生成成功'));
+
+    console.log();
+    UI.sectionHeader('Token 信息', '🔑');
+    UI.emptyRow();
+    console.log(chalk.cyan('│') + chalk.white('  ') + chalk.green(result.data.token) + ' '.repeat(Math.max(0, 60 - result.data.token.length - 2)) + chalk.cyan('│'));
+    UI.emptyRow();
+    UI.sectionFooter();
+    
+    console.log();
+    console.log(chalk.gray('  使用方式:'));
+    console.log(chalk.gray(`  export CLAWNET_TOKEN="${result.data.token}"`));
+  } catch (error) {
+    spinner.fail(chalk.red(`失败: ${error.message}`));
+  }
+
+  await pressEnter();
+}
+
+async function configMenu() {
+  while (true) {
+    UI.clear();
+    UI.sectionHeader('配置管理', '⚙️');
+    UI.emptyRow();
+    UI.infoRow('服务器', config.url || CLAWNET_URL);
+    UI.infoRow('Token', config.token ? '已配置' : '未配置', config.token);
+    UI.sectionFooter();
+    console.log();
+
+    const { action } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'action',
+        message: chalk.white('选择操作:'),
+        choices: [
+          { name: '🔧  配置服务器地址', value: 'server' },
+          { name: '🔑  配置 Token', value: 'token' },
+          new inquirer.Separator(),
+          { name: '🔙  返回主菜单', value: 'back' }
+        ]
+      }
+    ]);
+
+    if (action === 'back') return;
+
+    if (action === 'server') {
+      const { url } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'url',
+          message: chalk.white('服务器地址:'),
+          default: config.url || CLAWNET_URL
+        }
+      ]);
+      config.url = url;
+      saveConfig(config);
+      console.log(chalk.green('\n  ✅ 已保存'));
+    }
+
+    if (action === 'token') {
+      const { token } = await inquirer.prompt([
+        {
+          type: 'password',
+          name: 'token',
+          message: chalk.white('API Token:'),
+          mask: '*'
+        }
+      ]);
+      config.token = token;
+      saveConfig(config);
+      console.log(chalk.green('\n  ✅ 已保存'));
+    }
+
+    await pressEnter();
+  }
+}
+
+// ==================== 工具函数 ====================
+
+async function pressEnter() {
+  await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'continue',
+      message: chalk.gray('按回车继续...'),
+      prefix: ''
+    }
+  ]);
+}
+
+// ==================== 主程序 ====================
+
+async function main() {
+  try {
+    while (true) {
+      try {
+        const action = await mainMenu();
+
+        switch (action) {
+          case 'create-node': await createNode(); break;
+          case 'list-nodes': await listNodes(); break;
+          case 'get-node': await getNode(); break;
+          case 'delete-node': await deleteNode(); break;
+          case 'create-relation': await createRelation(); break;
+          case 'list-relations': await listRelations(); break;
+          case 'cleanup-relations': await cleanupRelations(); break;
+          case 'list-online': await listOnline(); break;
+          case 'generate-token': await generateToken(); break;
+          case 'config': await configMenu(); break;
+          case 'exit':
+            UI.clear();
+            console.log();
+            console.log(chalk.cyan('  再见! 👋'));
+            console.log();
+            process.exit(0);
+        }
+      } catch (error) {
+        if (error.message === 'User force closed with prompt with a non-null value') {
+          console.log();
+          console.log(chalk.cyan('  再见! 👋'));
+          process.exit(0);
+        }
+        console.error(chalk.red(`\n  错误: ${error.message}\n`));
+        await pressEnter();
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red(`\n  致命错误: ${error.message}\n`));
+    process.exit(1);
+  }
+}
+
+main();

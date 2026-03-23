@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-03-23
+
+### New Feature
+- 🎮 **ClawNet CTL** - Modern TUI control interface (OpenCode-style)
+  - `clawnet-ctl` command for enhanced visual experience
+  - Status panel with real-time system metrics
+  - Box-drawing UI with clear visual hierarchy
+  - Grouped menu with icons and separators
+  - Better Chinese character alignment
+
+### UI Improvements
+- ✅ Box borders using `┌─┐│├┤└┘` characters
+- ✅ Status indicators (✓/✗) for success/failure states
+- ✅ Section headers with emojis
+- ✅ Proper CJK character width calculation
+- ✅ Cleaner menu organization
+
+### New Command
+```bash
+clawnet-ctl          # Launch modern TUI interface
+npm run ctl          # Alternative via npm script
+```
+
 ## [0.6.0] - 2026-03-20
 
 ### Major Changes
