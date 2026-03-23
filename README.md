@@ -6,10 +6,14 @@
 
 **ClawNet** | **[中文版](README_CN.md)** | **[Windows 安装](INSTALL_WINDOWS.md)** | **[CLI 指南](CLI-GUIDE.md)**
 
-[![npm version](https://badge.fury.io/js/@husile%2Fclawnet.svg)](https://www.npmjs.com/package/@husile/clawnet)
-[![npm downloads](https://img.shields.io/npm/dm/@husile/clawnet.svg)](https://www.npmjs.com/package/@husile/clawnet)
+[![npm version](https://badge.fury.io/js/@husile%2Fclawnet-lite.svg)](https://www.npmjs.com/package/@husile/clawnet-lite)
+[![npm downloads](https://img.shields.io/npm/dm/@husile/clawnet-lite.svg)](https://www.npmjs.com/package/@husile/clawnet-lite)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org)
+
+> **📢 当前版本: `@husile/clawnet-lite` (轻量版)**
+> 
+> 📦 [查看版本说明](VERSION-NOTES.md) | 🔄 [从完整版迁移](VERSION-NOTES.md#q-从完整版迁移到-lite-版本需要做什么)
 
 </div>
 
@@ -44,27 +48,44 @@ ClawNet is a multi-node intelligent collaboration system based on relation netwo
 
 > **🪟 Windows Users:** See [Windows Installation Guide](INSTALL_WINDOWS.md) for detailed instructions.
 
+### Lite 版本（当前推荐）
+
 ```bash
 # Using npm (recommended)
-npm install @husile/clawnet
-
-# If you encounter issues on Windows with better-sqlite3, use:
-npm install @husile/clawnet --ignore-scripts
-
-# Or use the memory mode (no database required):
-const clawnet = new ClawNet({ storage: 'memory' });
+npm install @husile/clawnet-lite
 
 # Using yarn
-yarn add @husile/clawnet
+yarn add @husile/clawnet-lite
 
 # Using pnpm
-pnpm add @husile/clawnet
+pnpm add @husile/clawnet-lite
 
-# Or clone the repository
+# Global installation for CLI
+npm install -g @husile/clawnet-lite
+```
+
+### 添加 SQLite 支持（可选）
+
+如果需要持久化存储功能：
+
+```bash
+# Install SQLite dependency
+npm install better-sqlite3
+
+# Or use memory mode (no database required):
+const clawnet = new ClawNet({ storage: 'memory' });
+```
+
+### 从源码安装
+
+```bash
+# Clone the repository
 git clone https://github.com/Bsheepcoder/ClawNet.git
 cd ClawNet
 npm install
 ```
+
+> **📖 版本说明:** 了解 Lite 版本的详细说明，请查看 [VERSION-NOTES.md](VERSION-NOTES.md)
 
 ## ⚙️ Configuration
 
@@ -126,7 +147,7 @@ npm start
 ### Usage Example
 
 ```javascript
-const { Graph, Node } = require('@husile/clawnet');
+const { Graph, Node } = require('@husile/clawnet-lite');
 
 // Create a relation graph
 const graph = new Graph();
@@ -176,6 +197,32 @@ ws.send(JSON.stringify({
   content: 'Hello!'
 }));
 ```
+
+## 📦 版本说明 | Version Info
+
+### 当前版本：`@husile/clawnet-lite` (轻量版)
+
+ClawNet 目前维护 **Lite 版本**，具有以下特点：
+
+| 特性 | 说明 |
+|------|------|
+| **🚀 易于安装** | 无原生依赖，所有平台一键安装 |
+| **📦 体积更小** | 不包含 `better-sqlite3` (~2-5MB) |
+| **🔧 兼容性更好** | 不依赖 C++ 编译工具链 |
+| **⚡ 快速部署** | 适合 CI/CD、Docker、云函数 |
+| **✅ 功能完整** | 100% 功能，SQLite 为可选依赖 |
+
+### 安装对比
+
+```bash
+# Lite 版本（默认）
+npm install @husile/clawnet-lite
+
+# 如需持久化存储，手动安装 SQLite
+npm install better-sqlite3
+```
+
+> **📖 详细说明:** 查看 [VERSION-NOTES.md](VERSION-NOTES.md) 了解版本对比、迁移指南和 FAQ
 
 ## 🔒 Security
 
