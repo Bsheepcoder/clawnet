@@ -729,6 +729,103 @@ app.delete('/instances/:name', async (req: Request, res: Response) => {
   }
 });
 
+// 微信ClawBot连接 - 执行登录命令并返回输出
+app.post('/instances/:name/wechat/login', async (req: Request, res: Response) => {
+  try {
+    const instanceName = req.params.name;
+    
+    // 执行登录命令（异步，通过WebSocket推送输出）
+    const { spawn } = require('child_process');
+    const sessionId = `wechat-login-${instanceName}-${Date.now()}`;
+    
+    res.json({
+      success: true,
+      data: {
+        sessionId,
+        message: '登录命令已启动，请通过WebSocket接收输出',
+        wsChannel: `/ws/instances/${instanceName}/wechat/login`
+      }
+    });
+    
+    // 异步执行命令
+    const child = spawn('openclaw', [
+      '--profile', instanceName,
+      'channels', 'login',
+      '--channel', 'openclaw-weixin'
+    ], {
+      cwd: process.env.HOME
+    });
+    
+    let output = '';
+    
+    child.stdout.on('data', (data: Buffer) => {
+      const text = data.toString();
+      output += text;
+      
+      // 通过WebSocket推送输出
+      wsService.broadcast({
+        type: 'wechat:login:output',
+        sessionId,
+        instance: instanceName,
+        output: text,
+        timestamp: Date.now()
+      });
+      
+      // 检查是否包含二维码URL
+      const qrUrlMatch = text.match(/https?:\/\/[^\s]+?(?:qr|login)[^\s]*/i);
+      if (qrUrlMatch) {
+        wsService.broadcast({
+          type: 'wechat:login:qrcode',
+          sessionId,
+          instance: instanceName,
+          qrUrl: qrUrlMatch[0],
+          timestamp: Date.now()
+        });
+      }
+    });
+    
+    child.stderr.on('data', (data: Buffer) => {
+      const text = data.toString();
+      output += text;
+      
+      wsService.broadcast({
+        type: 'wechat:login:output',
+        sessionId,
+        instance: instanceName,
+        output: text,
+        timestamp: Date.now()
+      });
+    });
+    
+    child.on('close', (code: number) => {
+      wsService.broadcast({
+        type: 'wechat:login:complete',
+        sessionId,
+        instance: instanceName,
+        code,
+        output,
+        timestamp: Date.now()
+      });
+    });
+    
+    child.on('error', (error: Error) => {
+      wsService.broadcast({
+        type: 'wechat:login:error',
+        sessionId,
+        instance: instanceName,
+        error: error.message,
+        timestamp: Date.now()
+      });
+    });
+    
+  } catch (error: any) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // 微信ClawBot连接 - 获取连接信息
 app.get('/instances/:name/wechat/qrcode', async (req: Request, res: Response) => {
   try {
@@ -755,7 +852,12 @@ app.get('/instances/:name/wechat/qrcode', async (req: Request, res: Response) =>
           '💡 提示：微信登录是一次性操作，使用CLI更可靠',
           '💡 如果二维码显示不清晰，命令会输出二维码URL',
           '💡 可以在浏览器中打开URL查看高清二维码'
-        ]
+        ],
+        // 新增：支持通过WebSocket执行
+        websocket: {
+          endpoint: '/ws/instances/:name/wechat/login',
+          description: '通过WebSocket实时推送登录输出'
+        }
       }
     });
   } catch (error: any) {

@@ -114,6 +114,22 @@ export class WebSocketService {
     });
     return sentTo;
   }
+  
+  // 广播消息给所有连接的客户端
+  broadcast(event: any): void {
+    const message = JSON.stringify(event);
+    this.clients.forEach((connections) => {
+      connections.forEach(ws => {
+        try {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(message);
+          }
+        } catch (error) {
+          // 忽略发送错误
+        }
+      });
+    });
+  }
 
   // 获取在线节点
   getOnlineNodes(): string[] {
