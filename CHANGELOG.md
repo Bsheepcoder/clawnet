@@ -2,6 +2,88 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-03-23
+
+### 🎉 Major Feature: Multi-Instance Management
+
+**ClawNet now includes complete OpenClaw instance management capabilities!**
+
+This release integrates the functionality of `multi-openclaw` into ClawNet, making it a unified management platform for OpenClaw instances.
+
+### New Features
+
+#### 📦 Instance Management (NEW)
+- **Create instances**: `clawnet instance create <name>`
+- **List instances**: `clawnet instance list`
+- **Start gateway**: `clawnet instance start <name>`
+- **Stop gateway**: `clawnet instance stop <name>`
+- **Connect to ClawNet**: `clawnet instance connect <name>`
+- **WeChat login**: `clawnet instance login <name>`
+
+#### 🔌 RESTful API Endpoints
+- `GET /instances` - List all instances
+- `GET /instances/:name` - Get instance details
+- `POST /instances` - Create new instance
+- `POST /instances/:name/start` - Start instance
+- `POST /instances/:name/stop` - Stop instance
+- `POST /instances/:name/connect` - Connect to ClawNet
+
+#### ⚙️ Instance Management Features
+- Auto port calculation (19000-19099)
+- Auto WeChat plugin installation
+- Gateway process management
+- Instance status monitoring
+- WeChat login status tracking
+- ClawNet connection management
+
+### Architecture Changes
+
+**Before:**
+```
+multi-openclaw (separate CLI) → Manage instances
+clawnet (separate) → Node/Relation management
+```
+
+**After:**
+```
+clawnet (unified platform)
+├── instance → Instance management
+├── node → Node management
+├── relation → Relation management
+└── health → Health check
+```
+
+### New CLI
+
+```bash
+# Unified command structure
+clawnet instance create <name>      # Create instance
+clawnet instance list               # List all instances
+clawnet instance start <name>       # Start gateway
+clawnet instance stop <name>        # Stop gateway
+clawnet instance connect <name>     # Connect to ClawNet
+clawnet instance login <name>       # WeChat login
+```
+
+### Files Changed
+- ✅ `src/instance-service.ts` - New instance management service
+- ✅ `src/server.ts` - Added instance API endpoints
+- ✅ `bin/clawnet-v2` - New unified CLI (will replace clawnet-ctl)
+- ✅ `package.json` - Version bump to 0.7.0
+
+### Breaking Changes
+None - All existing commands remain compatible
+
+### Migration Guide
+If you were using `multi-openclaw`:
+```bash
+# Old command
+multi-openclaw create test
+
+# New command
+clawnet instance create test
+```
+
 ## [0.6.1] - 2026-03-23
 
 ### New Feature

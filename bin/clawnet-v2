@@ -1,0 +1,401 @@
+#!/usr/bin/env node
+/**
+ * ClawNet CLI - 统一命令行工具 v2
+ * 
+ * 整合：
+ * - 节点/关系管理
+ * - 实例管理 (Multi-OpenClaw)
+ * - 消息路由
+ * - 系统管理
+ */
+
+const chalk = require('chalk');
+const { Command } = require('commander');
+const inquirer = require('inquirer');
+const ora = require('ora');
+const { spawn } = require('child_process');
+
+const CLAWNET_URL = process.env.CLAWNET_URL || 'http://localhost:3000';
+const CLAWNET_TOKEN = process.env.CLAWNET_TOKEN || 'clawnet-secret-token';
+
+// API 请求
+async function request(endpoint, options = {}) {
+  const url = `${CLAWNET_URL}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${CLAWNET_TOKEN}`,
+    ...options.headers
+  };
+  const response = await fetch(url, { ...options, headers });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || response.statusText);
+  return result;
+}
+
+// ========== 程序定义 ==========
+
+const program = new Command();
+
+program
+  .name('clawnet')
+  .description('🦞 ClawNet - 关系驱动的智能协作网络')
+  .version('0.6.2');
+
+// ========== 节点命令 ==========
+
+const nodeCmd = program.command('node').description('节点管理');
+
+nodeCmd
+  .command('create <id>')
+  .description('创建节点')
+  .option('-t, --type <type>', '节点类型', 'bot')
+  .option('-n, --name <name>', '节点名称')
+  .action(async (id, options) => {
+    const spinner = ora('创建节点...').start();
+    try {
+      await request('/nodes', {
+        method: 'POST',
+        body: JSON.stringify({ id, type: options.type, name: options.name || id })
+      });
+      spinner.succeed(chalk.green(`节点创建成功: ${id}`));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+nodeCmd
+  .command('list')
+  .alias('ls')
+  .description('列出所有节点')
+  .action(async () => {
+    const spinner = ora('加载节点...').start();
+    try {
+      const result = await request('/nodes');
+      spinner.stop();
+      
+      if (result.data.length === 0) {
+        console.log(chalk.gray('暂无节点'));
+        return;
+      }
+      
+      console.log();
+      console.log(chalk.cyan.bold('节点列表:'));
+      console.log();
+      
+      const typeEmojis = {
+        human: '👤',
+        bot: '🤖',
+        device: '📱',
+        org: '🏢',
+        system: '⚙️'
+      };
+      
+      result.data.forEach((node) => {
+        const emoji = typeEmojis[node.type] || '📦';
+        console.log(`  ${emoji}  ${chalk.bold(node.id)}`);
+        console.log(`      类型: ${node.type}  名称: ${node.name || '-'}`);
+      });
+      
+      console.log();
+      console.log(chalk.gray(`共 ${result.data.length} 个节点`));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+nodeCmd
+  .command('delete <id>')
+  .alias('rm')
+  .description('删除节点')
+  .action(async (id) => {
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: chalk.yellow(`确定删除节点 "${id}"?`),
+        default: false
+      }
+    ]);
+    
+    if (!confirm) {
+      console.log(chalk.gray('已取消'));
+      return;
+    }
+    
+    const spinner = ora('删除节点...').start();
+    try {
+      await request(`/nodes/${id}`, { method: 'DELETE' });
+      spinner.succeed(chalk.green(`节点已删除: ${id}`));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+// ========== 关系命令 ==========
+
+const relCmd = program.command('relation').alias('rel').description('关系管理');
+
+relCmd
+  .command('create <from> <to>')
+  .description('创建关系')
+  .option('-t, --type <type>', '关系类型', 'observe')
+  .option('-p, --perms <perms>', '权限列表 (逗号分隔)', 'read')
+  .option('--ttl <ms>', '临时关系 TTL (毫秒)')
+  .action(async (from, to, options) => {
+    const spinner = ora('创建关系...').start();
+    try {
+      const body = {
+        from,
+        to,
+        type: options.type,
+        permissions: options.perms.split(',')
+      };
+      
+      if (options.ttl) {
+        body.ttl = parseInt(options.ttl);
+      }
+      
+      await request('/relations', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+      
+      spinner.succeed(chalk.green(`关系创建成功: ${from} → ${to}`));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+relCmd
+  .command('list')
+  .alias('ls')
+  .description('列出所有关系')
+  .action(async () => {
+    const spinner = ora('加载关系...').start();
+    try {
+      const result = await request('/relations');
+      spinner.stop();
+      
+      if (result.data.length === 0) {
+        console.log(chalk.gray('暂无关系'));
+        return;
+      }
+      
+      console.log();
+      console.log(chalk.cyan.bold('关系列表:'));
+      console.log();
+      
+      result.data.forEach((rel) => {
+        const status = rel.isTemporary 
+          ? chalk.yellow(`(临时, ${Math.round((rel.expiresAt - Date.now()) / 1000)}s)`)
+          : chalk.green('(永久)');
+        
+        console.log(`  ${rel.from} → ${rel.to} ${status}`);
+        console.log(`      类型: ${rel.type} | 权限: ${rel.permissions.join(', ')}`);
+      });
+      
+      console.log();
+      console.log(chalk.gray(`共 ${result.data.length} 个关系`));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+// ========== 实例命令 ==========
+
+const instCmd = program.command('instance').alias('inst').description('OpenClaw 实例管理');
+
+instCmd
+  .command('create <name>')
+  .description('创建新实例')
+  .action(async (name) => {
+    console.log();
+    console.log(chalk.cyan(`创建实例: ${name}`));
+    console.log();
+    
+    // 使用 openclaw CLI 创建
+    const child = spawn('openclaw', ['--profile', name, 'plugins', 'install', '@tencent-weixin/openclaw-weixin'], {
+      stdio: 'inherit'
+    });
+    
+    child.on('close', async (code) => {
+      if (code === 0) {
+        // 配置
+        const port = 19000 + (name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 100);
+        
+        try {
+          await execAsync(`openclaw --profile ${name} config set gateway.port ${port}`);
+          await execAsync(`openclaw --profile ${name} config set plugins.allow '["openclaw-weixin"]'`);
+          
+          console.log();
+          console.log(chalk.green('✅ 实例创建成功!'));
+          console.log();
+          console.log('下一步:');
+          console.log(`  1. 登录微信: clawnet instance login ${name}`);
+          console.log(`  2. 启动网关: clawnet instance start ${name}`);
+          console.log(`  3. 连接协作: clawnet instance connect ${name}`);
+        } catch (error) {
+          console.log(chalk.red('配置失败:', error.message));
+        }
+      }
+    });
+  });
+
+instCmd
+  .command('list')
+  .alias('ls')
+  .description('列出所有实例')
+  .action(async () => {
+    try {
+      const result = await request('/instances');
+      
+      if (result.data.length === 0) {
+        console.log(chalk.gray('暂无实例'));
+        console.log();
+        console.log('创建实例: clawnet instance create <name>');
+        return;
+      }
+      
+      console.log();
+      console.log(chalk.cyan.bold('实例列表:'));
+      console.log();
+      
+      result.data.forEach((inst) => {
+        const statusIcon = inst.status === 'running' 
+          ? chalk.green('●') 
+          : chalk.red('○');
+        const wechatIcon = inst.wechat?.loggedIn 
+          ? chalk.green('✓') 
+          : chalk.gray('✗');
+        const clawnetIcon = inst.clawnet?.connected 
+          ? chalk.green('✓') 
+          : chalk.gray('✗');
+        
+        console.log(`  ${statusIcon}  ${chalk.bold(inst.name)}`);
+        console.log(`      端口: ${inst.port}  状态: ${inst.status}`);
+        console.log(`      微信: ${wechatIcon}  ClawNet: ${clawnetIcon}`);
+        console.log();
+      });
+      
+      console.log(chalk.gray(`共 ${result.data.length} 个实例`));
+    } catch (error) {
+      console.log(chalk.red('获取实例列表失败:', error.message));
+    }
+  });
+
+instCmd
+  .command('login <name>')
+  .description('登录微信')
+  .action((name) => {
+    console.log();
+    console.log(chalk.cyan('请在微信中扫描以下二维码:'));
+    console.log();
+    
+    const child = spawn('openclaw', ['--profile', name, 'channels', 'login', '--channel', 'openclaw-weixin'], {
+      stdio: 'inherit'
+    });
+    
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log();
+        console.log(chalk.green('✅ 登录成功!'));
+        console.log();
+        console.log('下一步: clawnet instance start ' + name);
+      }
+    });
+  });
+
+instCmd
+  .command('start <name>')
+  .description('启动实例网关')
+  .action(async (name) => {
+    const spinner = ora('启动网关...').start();
+    try {
+      const result = await request(`/instances/${name}/start`, { method: 'POST' });
+      spinner.succeed(chalk.green(result.message || '网关已启动'));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+instCmd
+  .command('stop <name>')
+  .description('停止实例网关')
+  .action(async (name) => {
+    const spinner = ora('停止网关...').start();
+    try {
+      const result = await request(`/instances/${name}/stop`, { method: 'POST' });
+      spinner.succeed(chalk.green(result.message || '网关已停止'));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+instCmd
+  .command('connect <name>')
+  .description('连接到 ClawNet')
+  .action(async (name) => {
+    const spinner = ora('连接到 ClawNet...').start();
+    try {
+      const result = await request(`/instances/${name}/connect`, { method: 'POST' });
+      spinner.succeed(chalk.green(result.message || '已连接'));
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+// ========== 系统命令 ==========
+
+program
+  .command('health')
+  .description('健康检查')
+  .action(async () => {
+    try {
+      const result = await request('/health');
+      
+      console.log();
+      console.log(chalk.cyan.bold('ClawNet 状态:'));
+      console.log();
+      console.log(`  状态: ${chalk.green('健康')}`);
+      console.log(`  节点: ${result.stats.nodes}`);
+      console.log(`  关系: ${result.stats.relations}`);
+      console.log(`  WS 连接: ${result.stats.wsConnections}`);
+      console.log();
+      console.log('功能:');
+      console.log(`  REST API:  ${result.features.rest ? chalk.green('✓') : chalk.red('✗')}`);
+      console.log(`  WebSocket: ${result.features.websocket ? chalk.green('✓') : chalk.red('✗')}`);
+      console.log(`  认证:      ${result.features.auth ? chalk.green('✓') : chalk.red('✗')}`);
+    } catch (error) {
+      console.log(chalk.red('❌ ClawNet 服务未运行'));
+      console.log();
+      console.log('启动服务: clawnet-server');
+    }
+  });
+
+program
+  .command('token')
+  .description('生成新 Token')
+  .action(async () => {
+    const spinner = ora('生成 Token...').start();
+    try {
+      const result = await request('/tokens', { method: 'POST' });
+      spinner.succeed(chalk.green('Token 已生成'));
+      console.log();
+      console.log(`  Token: ${chalk.cyan(result.data.token)}`);
+      console.log();
+      console.log('使用方式:');
+      console.log(`  export CLAWNET_TOKEN="${result.data.token}"`);
+    } catch (error) {
+      spinner.fail(chalk.red(error.message));
+    }
+  });
+
+// ========== 辅助函数 ==========
+
+const { promisify } = require('util');
+const { exec: execCb } = require('child_process');
+const execAsync = promisify(execCb);
+
+// ========== 解析参数 ==========
+
+program.parse();

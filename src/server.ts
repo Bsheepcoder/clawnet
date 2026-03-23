@@ -3,6 +3,7 @@
  * + WebSocket 实时推送
  * + Token 认证
  * + 微信公众号集成
+ * + 实例管理
  */
 
 import express, { Request, Response } from 'express';
@@ -14,11 +15,14 @@ import { RelationType, Permission } from './types';
 import { WebSocketService } from './websocket';
 import { authMiddleware, generateToken } from './auth';
 import { WeChatAdapter, WeChatConfig, getWeChatConfig } from './adapters/wechat-adapter';
+import { InstanceManager, OpenClawInstance } from './instance-service';
+import { listInstances, getInstance, createInstance, startInstance, stopInstance, connectInstance } from './instance-service';
 
 const app = express();
 const server = createServer(app);
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
+const CLAWNET_URL = process.env.CLAWNET_URL || `http://localhost:${PORT}`;
 
 // 基础中间件
 app.use(cors());
@@ -535,6 +539,178 @@ app.post('/route', async (req: Request, res: Response) => {
 app.get('/ws/online', (req: Request, res: Response) => {
   const nodes = wsService.getOnlineNodes();
   res.json({ success: true, data: nodes });
+});
+
+// ========== 实例管理 API ==========
+
+// 列出所有实例
+app.get('/instances', async (req: Request, res: Response) => {
+  try {
+    const instances = await listInstances(CLAWNET_URL);
+    res.json({ success: true, data: instances });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取单个实例
+app.get('/instances/:name', async (req: Request, res: Response) => {
+  try {
+    const instance = await getInstance(req.params.name);
+    if (!instance) {
+      return res.status(404).json({ success: false, error: 'Instance not found' });
+    }
+    res.json({ success: true, data: instance });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 创建新实例
+app.post('/instances', async (req: Request, res: Response) => {
+  try {
+    const { name, autoInstallWeixin } = req.body;
+    const result = await createInstance({ name, autoInstallWeixin });
+    
+    if (result.success) {
+      res.json({ success: true, data: result.instance });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 启动实例网关
+app.post('/instances/:name/start', async (req: Request, res: Response) => {
+  try {
+    const result = await startInstance(req.params.name);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 停止实例网关
+app.post('/instances/:name/stop', async (req: Request, res: Response) => {
+  try {
+    const result = await stopInstance(req.params.name);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 连接实例到 ClawNet
+app.post('/instances/:name/connect', async (req: Request, res: Response) => {
+  try {
+    const result = await connectInstance(req.params.name, CLAWNET_URL);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== 实例管理 API (新增) ==========
+
+// 列出所有实例
+app.get('/instances', async (req, res) => {
+  try {
+    const instances = await listInstances(CLAWNET_URL);
+    res.json({ success: true, data: instances });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取单个实例
+app.get('/instances/:name', async (req: Request, res: Response) => {
+  try {
+    const instance = await getInstance(req.params.name);
+    if (!instance) {
+      return res.status(404).json({ success: false, error: 'Instance not found' });
+    }
+    res.json({ success: true, data: instance });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 创建新实例
+app.post('/instances', async (req: Request, res: Response) => {
+  try {
+    const { name, autoInstallWeixin } = req.body;
+    const result = await createInstance({ name, autoInstallWeixin });
+    
+    if (result.success) {
+      res.json({ success: true, data: result.instance });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 启动实例网关
+app.post('/instances/:name/start', async (req: Request, res: Response) => {
+  try {
+    const result = await startInstance(req.params.name);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 停止实例网关
+app.post('/instances/:name/stop', async (req: Request, res: Response) => {
+  try {
+    const result = await stopInstance(req.params.name);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 连接实例到 ClawNet
+app.post('/instances/:name/connect', async (req: Request, res: Response) => {
+  try {
+    const result = await connectInstance(req.params.name, CLAWNET_URL);
+    
+    if (result.success) {
+      res.json({ success: true, message: result.message });
+    } else {
+      res.status(400).json({ success: false, error: result.message });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ========== 工具 API ==========

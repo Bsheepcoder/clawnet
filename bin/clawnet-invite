@@ -1,0 +1,443 @@
+#!/usr/bin/env node
+/**
+ * ClawNet Invite - 邀请管理工具
+ * 
+ * 功能：
+ * 1. 生成邀请码
+ * 2. 管理待激活用户
+ * 3. 集成到 ClawBot 消息处理
+ */
+
+const chalk = require('chalk');
+const inquirer = require('inquirer');
+const fs = require('fs');
+const path = require('path');
+
+const CLAWNET_URL = process.env.CLAWNET_URL || 'http://localhost:3000';
+const CLAWNET_TOKEN = process.env.CLAWNET_TOKEN || 'clawnet-secret-token';
+const INVITE_FILE = path.join(process.env.HOME || process.env.USERPROFILE, '.clawnet-invites.json');
+
+// ==================== 邀请存储 ====================
+
+function loadInvites() {
+  try {
+    if (fs.existsSync(INVITE_FILE)) {
+      return JSON.parse(fs.readFileSync(INVITE_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return { invites: {}, activations: {} };
+}
+
+function saveInvites(data) {
+  fs.writeFileSync(INVITE_FILE, JSON.stringify(data, null, 2));
+}
+
+// ==================== 邀请码生成 ====================
+
+function generateInviteCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// ==================== API ====================
+
+async function request(endpoint, options = {}) {
+  const url = `${CLAWNET_URL}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${CLAWNET_TOKEN}`,
+    ...options.headers
+  };
+  const response = await fetch(url, { ...options, headers });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || response.statusText);
+  return result;
+}
+
+// ==================== UI ====================
+
+const UI = {
+  banner() {
+    console.log();
+    console.log(chalk.cyan.bold('  ╔══════════════════════════════════════════════════════╗'));
+    console.log(chalk.cyan.bold('  ║') + chalk.white.bold('        🎫  ClawNet Invite Manager              ') + chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('  ║') + chalk.gray('        Multi-user access control              ') + chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('  ╚══════════════════════════════════════════════════════╝'));
+    console.log();
+  },
+  
+  divider() {
+    console.log(chalk.gray('  ' + '─'.repeat(54)));
+  }
+};
+
+// ==================== 功能 ====================
+
+async function createInvite() {
+  console.log();
+  console.log(chalk.cyan.bold('  ➕ 创建邀请'));
+  console.log();
+  
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'name',
+      message: chalk.white('用户名称:'),
+      validate: (input) => input.length > 0 || '请输入名称'
+    },
+    {
+      type: 'number',
+      name: 'ttl',
+      message: chalk.white('有效期 (小时，0=永久):'),
+      default: 24
+    }
+  ]);
+  
+  const code = generateInviteCode();
+  const data = loadInvites();
+  
+  data.invites[code] = {
+    name: answers.name,
+    createdAt: Date.now(),
+    expiresAt: answers.ttl > 0 ? Date.now() + answers.ttl * 3600000 : null,
+    used: false
+  };
+  
+  saveInvites(data);
+  
+  console.log();
+  console.log(chalk.green.bold('  ✅ 邀请创建成功!'));
+  console.log();
+  console.log(chalk.cyan('  ┌' + '─'.repeat(52) + '┐'));
+  console.log(chalk.cyan('  │') + ' '.repeat(52) + chalk.cyan('│'));
+  console.log(chalk.cyan('  │') + chalk.white.bold(`    邀请码: ${code}`) + ' '.repeat(44 - code.length) + chalk.cyan('│'));
+  console.log(chalk.cyan('  │') + chalk.gray(`    用户: ${answers.name}`) + ' '.repeat(45 - answers.name.length) + chalk.cyan('│'));
+  console.log(chalk.cyan('  │') + chalk.gray(`    有效期: ${answers.ttl > 0 ? answers.ttl + ' 小时' : '永久'}`) + ' '.repeat(35) + chalk.cyan('│'));
+  console.log(chalk.cyan('  │') + ' '.repeat(52) + chalk.cyan('│'));
+  console.log(chalk.cyan('  └' + '─'.repeat(52) + '┘'));
+  console.log();
+  console.log(chalk.yellow('  💡 把邀请码发给用户，让 TA 给 ClawBot 发消息激活'));
+  console.log();
+}
+
+async function listInvites() {
+  console.log();
+  console.log(chalk.cyan.bold('  📋 邀请列表'));
+  console.log();
+  
+  const data = loadInvites();
+  const invites = Object.entries(data.invites);
+  
+  if (invites.length === 0) {
+    console.log(chalk.gray('  暂无邀请'));
+    return;
+  }
+  
+  console.log(chalk.cyan('  ┌' + '─'.repeat(52) + '┐'));
+  console.log(chalk.cyan('  │') + ' Invite '.padEnd(8) + 'User'.padEnd(16) + 'Status'.padEnd(12) + 'Created'.padEnd(12) + chalk.cyan('│'));
+  console.log(chalk.cyan('  ├' + '─'.repeat(52) + '┤'));
+  
+  for (const [code, invite] of invites) {
+    const status = invite.used 
+      ? chalk.green('已使用')
+      : (invite.expiresAt && Date.now() > invite.expiresAt)
+        ? chalk.red('已过期')
+        : chalk.yellow('待使用');
+    
+    const created = new Date(invite.createdAt).toLocaleDateString();
+    console.log(chalk.cyan('  │') + ` ${code} `.padEnd(8) + invite.name.padEnd(14) + status + created.padEnd(10) + chalk.cyan('│'));
+  }
+  
+  console.log(chalk.cyan('  └' + '─'.repeat(52) + '┘'));
+  console.log();
+}
+
+async function listUsers() {
+  console.log();
+  console.log(chalk.cyan.bold('  👥 已激活用户'));
+  console.log();
+  
+  const data = loadInvites();
+  const users = Object.entries(data.activations);
+  
+  if (users.length === 0) {
+    console.log(chalk.gray('  暂无已激活用户'));
+    return;
+  }
+  
+  console.log(chalk.cyan('  ┌' + '─'.repeat(52) + '┐'));
+  console.log(chalk.cyan('  │') + ' User ID'.padEnd(24) + 'Name'.padEnd(16) + 'Activated'.padEnd(12) + chalk.cyan('│'));
+  console.log(chalk.cyan('  ├' + '─'.repeat(52) + '┤'));
+  
+  for (const [openId, user] of users) {
+    const name = user.name || 'Unknown';
+    const activated = new Date(user.activatedAt).toLocaleDateString();
+    console.log(chalk.cyan('  │') + ` ${openId.slice(-16)}`.padEnd(22) + name.padEnd(14) + activated.padEnd(10) + chalk.cyan('│'));
+  }
+  
+  console.log(chalk.cyan('  └' + '─'.repeat(52) + '┘'));
+  console.log();
+}
+
+async function revokeUser() {
+  console.log();
+  console.log(chalk.cyan.bold('  🚫 撤销用户'));
+  console.log();
+  
+  const data = loadInvites();
+  const users = Object.entries(data.activations);
+  
+  if (users.length === 0) {
+    console.log(chalk.gray('  暂无已激活用户'));
+    return;
+  }
+  
+  const { userId } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'userId',
+      message: chalk.white('选择要撤销的用户:'),
+      choices: users.map(([id, u]) => ({
+        name: `${u.name} (${id.slice(-16)})`,
+        value: id
+      }))
+    }
+  ]);
+  
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: chalk.yellow(`确定撤销用户 "${userId}"?`),
+      default: false
+    }
+  ]);
+  
+  if (!confirm) {
+    console.log(chalk.gray('  已取消'));
+    return;
+  }
+  
+  // 从 ClawNet 删除关系
+  try {
+    // 找到关系
+    const relations = await request('/relations');
+    const userRelation = relations.data.find(r => 
+      r.from === `user-${userId}` || r.to === `user-${userId}`
+    );
+    
+    if (userRelation) {
+      await request(`/relations/${userRelation.id}`, { method: 'DELETE' });
+    }
+    
+    // 删除节点
+    await request(`/nodes/user-${userId}`, { method: 'DELETE' });
+  } catch (e) {
+    console.log(chalk.yellow(`  ⚠️ ClawNet 删除失败: ${e.message}`));
+  }
+  
+  // 从本地删除
+  delete data.activations[userId];
+  saveInvites(data);
+  
+  console.log(chalk.green('  ✅ 用户已撤销'));
+}
+
+async function cleanExpired() {
+  console.log();
+  console.log(chalk.cyan.bold('  🧹 清理过期邀请'));
+  console.log();
+  
+  const data = loadInvites();
+  const now = Date.now();
+  let cleaned = 0;
+  
+  for (const [code, invite] of Object.entries(data.invites)) {
+    if (!invite.used && invite.expiresAt && now > invite.expiresAt) {
+      delete data.invites[code];
+      cleaned++;
+    }
+  }
+  
+  saveInvites(data);
+  console.log(chalk.green(`  ✅ 已清理 ${cleaned} 个过期邀请`));
+}
+
+// ==================== 导出给 ClawBot 使用 ====================
+
+/**
+ * 检查激活码是否有效
+ */
+async function checkInvite(code) {
+  const data = loadInvites();
+  const invite = data.invites[code.toUpperCase()];
+  
+  if (!invite) {
+    return { valid: false, reason: '无效的邀请码' };
+  }
+  
+  if (invite.used) {
+    return { valid: false, reason: '邀请码已使用' };
+  }
+  
+  if (invite.expiresAt && Date.now() > invite.expiresAt) {
+    return { valid: false, reason: '邀请码已过期' };
+  }
+  
+  return { valid: true, name: invite.name };
+}
+
+/**
+ * 激活用户
+ */
+async function activateUser(code, openId) {
+  const data = loadInvites();
+  const invite = data.invites[code.toUpperCase()];
+  
+  if (!invite) {
+    return { success: false, reason: '无效的邀请码' };
+  }
+  
+  // 标记邀请码已使用
+  invite.used = true;
+  invite.usedAt = Date.now();
+  invite.usedBy = openId;
+  
+  // 记录激活
+  data.activations[openId] = {
+    name: invite.name,
+    activatedAt: Date.now(),
+    inviteCode: code.toUpperCase()
+  };
+  
+  saveInvites(data);
+  
+  // 在 ClawNet 中创建用户和关系
+  try {
+    // 创建用户节点
+    await request('/nodes', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: `user-${openId}`,
+        type: 'human',
+        name: invite.name,
+        metadata: {
+          source: 'wechat',
+          activatedAt: new Date().toISOString()
+        }
+      })
+    });
+    
+    // 创建关系
+    await request('/relations', {
+      method: 'POST',
+      body: JSON.stringify({
+        from: `user-${openId}`,
+        to: 'wechat-bot',
+        type: 'observe',
+        permissions: ['read']
+      })
+    });
+    
+    return { success: true, name: invite.name };
+  } catch (e) {
+    return { success: false, reason: `ClawNet 错误: ${e.message}` };
+  }
+}
+
+/**
+ * 检查用户是否已激活
+ */
+function isUserActivated(openId) {
+  const data = loadInvites();
+  return !!data.activations[openId];
+}
+
+// ==================== 主菜单 ====================
+
+async function mainMenu() {
+  UI.banner();
+  
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: chalk.white('选择操作:'),
+      pageSize: 12,
+      choices: [
+        { name: '➕  创建邀请', value: 'create' },
+        { name: '📋  查看邀请列表', value: 'list' },
+        { name: '👥  查看已激活用户', value: 'users' },
+        { name: '🚫  撤销用户', value: 'revoke' },
+        { name: '🧹  清理过期邀请', value: 'clean' },
+        new inquirer.Separator(),
+        { name: '❌  退出', value: 'exit' }
+      ]
+    }
+  ]);
+  
+  return action;
+}
+
+// ==================== 导出 ====================
+
+module.exports = {
+  checkInvite,
+  activateUser,
+  isUserActivated
+};
+
+// ==================== CLI 入口 ====================
+
+if (require.main === module) {
+  (async () => {
+    try {
+      while (true) {
+        const action = await mainMenu();
+        
+        switch (action) {
+          case 'create':
+            await createInvite();
+            break;
+          case 'list':
+            await listInvites();
+            break;
+          case 'users':
+            await listUsers();
+            break;
+          case 'revoke':
+            await revokeUser();
+            break;
+          case 'clean':
+            await cleanExpired();
+            break;
+          case 'exit':
+            console.log();
+            console.log(chalk.cyan('  再见! 👋'));
+            console.log();
+            process.exit(0);
+        }
+        
+        await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'continue',
+            message: chalk.gray('按回车继续...')
+          }
+        ]);
+      }
+    } catch (e) {
+      if (e.message?.includes('force closed')) {
+        console.log();
+        console.log(chalk.cyan('  再见! 👋'));
+        process.exit(0);
+      }
+      console.error(chalk.red(`\n  错误: ${e.message}\n`));
+      process.exit(1);
+    }
+  })();
+}

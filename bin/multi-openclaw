@@ -1,0 +1,572 @@
+#!/bin/bash
+# 多 OpenClaw 实例管理脚本
+#
+# 每个用户一个独立的 OpenClaw 实例
+# 通过 ClawNet 连接协作
+
+set -e
+
+# 颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# 配置
+CLAWNET_URL="http://localhost:3000"
+CLAWNET_TOKEN="clawnet-secret-token"
+
+# 用户配置文件
+CONFIG_DIR="/root/.openclaw-multi"
+mkdir -p "$CONFIG_DIR"
+
+# ==================== 帮助 ====================
+
+show_help() {
+  echo
+  echo -e "${CYAN}Multi-OpenClaw Manager${NC}"
+  echo
+  echo "用法: multi-openclaw <command> [options]"
+  echo
+  echo "命令:"
+  echo "  create <name>       创建新的 OpenClaw 实例"
+  echo "  start <name>        启动指定实例"
+  echo "  stop <name>         停止指定实例"
+  echo "  status              查看所有实例状态"
+  echo "  list                列出所有实例"
+  echo "  login <name>        为指定实例登录微信"
+  echo "  gateway <name>      启动指定实例的网关"
+  echo "  gateway-stop <name> 停止指定实例的网关"
+  echo "  connect <name>      连接实例到 ClawNet"
+  echo "  start-all           启动所有实例"
+  echo "  stop-all            停止所有实例"
+  echo "  clawnet             启动 ClawNet 服务"
+  echo "  clawnet-status      查看 ClawNet 状态"
+  echo
+  echo "示例:"
+  echo "  multi-openclaw create alice"
+  echo "  multi-openclaw login alice"
+  echo "  multi-openclaw gateway alice"
+  echo "  multi-openclaw connect alice"
+  echo
+}
+
+# ==================== 工具函数 ====================
+
+get_port() {
+  local name=$1
+  local base_port=19000
+  
+  # 根据名称 hash 计算端口
+  local hash=$(echo "$name" | cksum | cut -d' ' -f1)
+  local port=$((base_port + (hash % 100)))
+  echo $port
+}
+
+get_profile_dir() {
+  local name=$1
+  echo "$HOME/.openclaw-$name"
+}
+
+get_pid_file() {
+  local name=$1
+  echo "$CONFIG_DIR/$name.pid"
+}
+
+is_running() {
+  local name=$1
+  local pid_file=$(get_pid_file "$name")
+  
+  if [ -f "$pid_file" ]; then
+    local pid=$(cat "$pid_file")
+    if ps -p $pid > /dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# ==================== 命令实现 ====================
+
+cmd_create() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  local profile_dir=$(get_profile_dir "$name")
+  
+  if [ -d "$profile_dir" ]; then
+    echo -e "${YELLOW}实例 '$name' 已存在${NC}"
+    return
+  fi
+  
+  local port=$(get_port "$name")
+  
+  echo
+  echo -e "${CYAN}创建 OpenClaw 实例: $name${NC}"
+  echo "  Profile 目录: $profile_dir"
+  echo "  Gateway 端口: $port"
+  echo
+  
+  # 创建目录
+  mkdir -p "$profile_dir"
+  
+  # 记录实例信息
+  echo "{\"name\":\"$name\",\"port\":$port,\"createdAt\":\"$(date -Iseconds)\"}" > "$CONFIG_DIR/$name.json"
+  
+  echo -e "${GREEN}✅ 实例 '$name' 创建成功${NC}"
+  echo
+  
+  # 安装微信插件
+  echo -e "${CYAN}安装微信插件...${NC}"
+  openclaw --profile "$name" plugins install @tencent-weixin/openclaw-weixin
+  
+  # 设置端口
+  echo -e "${CYAN}配置端口...${NC}"
+  openclaw --profile "$name" config set gateway.port $port
+  
+  # 设置插件允许列表
+  echo -e "${CYAN}配置插件...${NC}"
+  openclaw --profile "$name" config set plugins.allow '["openclaw-weixin"]'
+  
+  echo
+  echo -e "${GREEN}✅ 配置完成!${NC}"
+  echo
+  echo "下一步:"
+  echo "  1. 登录微信: multi-openclaw login $name"
+  echo "  2. 启动实例: multi-openclaw start $name"
+  echo "  3. 连接 ClawNet: multi-openclaw connect $name"
+}
+
+cmd_start() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  local profile_dir=$(get_profile_dir "$name")
+  
+  if [ ! -d "$profile_dir" ]; then
+    echo -e "${RED}错误: 实例 '$name' 不存在${NC}"
+    echo "请先创建: multi-openclaw create $name"
+    exit 1
+  fi
+  
+  if is_running "$name"; then
+    echo -e "${YELLOW}实例 '$name' 已在运行${NC}"
+    return
+  fi
+  
+  local port=$(get_port "$name")
+  
+  echo
+  echo -e "${CYAN}启动 OpenClaw 实例: $name${NC}"
+  echo "  端口: $port"
+  echo
+  
+  # 启动 gateway
+  nohup openclaw --profile "$name" gateway start > "$CONFIG_DIR/$name.log" 2>&1 &
+  local pid=$!
+  echo $pid > "$(get_pid_file "$name")"
+  
+  sleep 2
+  
+  if is_running "$name"; then
+    echo -e "${GREEN}✅ 实例 '$name' 启动成功 (PID: $pid)${NC}"
+    echo "  访问: http://localhost:$port"
+  else
+    echo -e "${RED}❌ 启动失败${NC}"
+    echo "  日志: $CONFIG_DIR/$name.log"
+  fi
+}
+
+cmd_stop() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  local pid_file=$(get_pid_file "$name")
+  
+  if [ ! -f "$pid_file" ]; then
+    echo -e "${YELLOW}实例 '$name' 未运行${NC}"
+    return
+  fi
+  
+  local pid=$(cat "$pid_file")
+  
+  echo -e "${CYAN}停止实例 '$name'...${NC}"
+  
+  # 停止 gateway
+  openclaw --profile "$name" gateway stop 2>/dev/null || true
+  
+  # 确保 PID 进程停止
+  kill $pid 2>/dev/null || true
+  
+  rm -f "$pid_file"
+  
+  echo -e "${GREEN}✅ 实例 '$name' 已停止${NC}"
+}
+
+cmd_status() {
+  echo
+  echo -e "${CYAN}OpenClaw 实例状态${NC}"
+  echo
+  
+  local found=0
+  
+  for config_file in "$CONFIG_DIR"/*.json; do
+    [ -f "$config_file" ] || continue
+    
+    local name=$(basename "$config_file" .json)
+    local info=$(cat "$config_file")
+    local port=$(echo "$info" | jq -r '.port')
+    local created=$(echo "$info" | jq -r '.createdAt')
+    
+    local status
+    if is_running "$name"; then
+      status="${GREEN}运行中${NC}"
+    else
+      status="${RED}已停止${NC}"
+    fi
+    
+    echo "  $name"
+    echo "    端口: $port"
+    echo "    状态: $status"
+    echo "    创建: $created"
+    echo
+    
+    found=1
+  done
+  
+  if [ $found -eq 0 ]; then
+    echo -e "  ${YELLOW}暂无实例${NC}"
+    echo
+    echo "  创建实例: multi-openclaw create <name>"
+  fi
+}
+
+cmd_list() {
+  echo
+  echo -e "${CYAN}OpenClaw 实例列表${NC}"
+  echo
+  
+  for config_file in "$CONFIG_DIR"/*.json; do
+    [ -f "$config_file" ] || continue
+    local name=$(basename "$config_file" .json)
+    local port=$(cat "$config_file" | jq -r '.port')
+    
+    local status
+    if is_running "$name"; then
+      status="${GREEN}●${NC}"
+    else
+      status="${RED}○${NC}"
+    fi
+    
+    echo "  $status $name (port: $port)"
+  done
+  
+  echo
+}
+
+cmd_login() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  local profile_dir=$(get_profile_dir "$name")
+  
+  if [ ! -d "$profile_dir" ]; then
+    echo -e "${RED}错误: 实例 '$name' 不存在${NC}"
+    exit 1
+  fi
+  
+  echo
+  echo -e "${CYAN}为实例 '$name' 登录微信${NC}"
+  echo
+  echo "请用微信扫描以下二维码:"
+  echo
+  
+  openclaw --profile "$name" channels login --channel openclaw-weixin
+}
+
+cmd_connect() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  local port=$(get_port "$name")
+  local node_id="openclaw-$name"
+  
+  echo
+  echo -e "${CYAN}连接实例 '$name' 到 ClawNet${NC}"
+  echo
+  
+  # 在 ClawNet 中注册节点
+  curl -s -X POST "$CLAWNET_URL/nodes" \
+    -H "Authorization: Bearer $CLAWNET_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\":\"$node_id\",\"type\":\"bot\",\"name\":\"OpenClaw-$name\",\"metadata\":{\"port\":$port}}" > /dev/null
+  
+  echo -e "${GREEN}✅ 已在 ClawNet 注册节点: $node_id${NC}"
+  echo
+  echo "现在其他用户可以通过 ClawNet 与此实例协作"
+}
+
+# ==================== 网关管理 ====================
+
+cmd_gateway() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  local profile_dir=$(get_profile_dir "$name")
+  
+  if [ ! -d "$profile_dir" ]; then
+    echo -e "${RED}错误: 实例 '$name' 不存在${NC}"
+    echo "请先创建: multi-openclaw create $name"
+    exit 1
+  fi
+  
+  local port=$(get_port "$name")
+  
+  echo
+  echo -e "${CYAN}启动实例 '$name' 的网关${NC}"
+  echo "  Profile: $profile_dir"
+  echo "  端口: $port"
+  echo
+  
+  # 检查微信是否已登录
+  local weixin_accounts="$profile_dir/openclaw-weixin/accounts.json"
+  if [ ! -f "$weixin_accounts" ]; then
+    echo -e "${YELLOW}⚠️  微信尚未登录${NC}"
+    echo "  请先运行: multi-openclaw login $name"
+    echo
+    read -p "是否继续启动网关? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      exit 0
+    fi
+  fi
+  
+  # 检查端口是否被占用
+  if netstat -tlnp 2>/dev/null | grep -q ":$port "; then
+    echo -e "${YELLOW}⚠️  端口 $port 已被占用${NC}"
+    echo "  尝试停止旧进程..."
+    openclaw --profile "$name" gateway stop 2>/dev/null || true
+    sleep 2
+  fi
+  
+  # 启动网关
+  echo -e "${CYAN}正在启动网关...${NC}"
+  nohup openclaw --profile "$name" gateway start > "$CONFIG_DIR/$name-gateway.log" 2>&1 &
+  local pid=$!
+  
+  # 等待启动
+  sleep 3
+  
+  # 检查是否成功
+  if netstat -tlnp 2>/dev/null | grep -q ":$port "; then
+    echo
+    echo -e "${GREEN}✅ 网关启动成功!${NC}"
+    echo
+    echo "  ┌──────────────────────────────────────────────┐"
+    echo "  │                                              │"
+    echo "  │  实例: $name"
+    echo "  │  端口: $port"
+    echo "  │  PID:  $pid"
+    echo "  │  日志: $CONFIG_DIR/$name-gateway.log"
+    echo "  │                                              │"
+    echo "  └──────────────────────────────────────────────┘"
+    echo
+    
+    # 保存 PID
+    echo $pid > "$CONFIG_DIR/$name-gateway.pid"
+    
+    echo -e "${CYAN}下一步:${NC}"
+    echo "  1. 给微信发消息测试"
+    echo "  2. 连接到 ClawNet: multi-openclaw connect $name"
+  else
+    echo
+    echo -e "${RED}❌ 网关启动失败${NC}"
+    echo
+    echo "  查看日志: tail -50 $CONFIG_DIR/$name-gateway.log"
+    echo
+  fi
+}
+
+cmd_gateway_stop() {
+  local name=$1
+  
+  if [ -z "$name" ]; then
+    echo -e "${RED}错误: 请指定实例名称${NC}"
+    exit 1
+  fi
+  
+  echo
+  echo -e "${CYAN}停止实例 '$name' 的网关${NC}"
+  
+  # 停止网关
+  openclaw --profile "$name" gateway stop 2>/dev/null || true
+  
+  # 清理 PID 文件
+  rm -f "$CONFIG_DIR/$name-gateway.pid"
+  
+  echo -e "${GREEN}✅ 网关已停止${NC}"
+}
+
+# ==================== ClawNet 管理 ====================
+
+cmd_clawnet_start() {
+  echo
+  echo -e "${CYAN}启动 ClawNet 服务${NC}"
+  echo
+  
+  # 检查是否已运行
+  if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  ClawNet 已在运行${NC}"
+    return
+  fi
+  
+  # 启动 ClawNet
+  local clawnet_dir="/root/.openclaw/workspace/clawnet-mvp"
+  
+  if [ ! -d "$clawnet_dir" ]; then
+    echo -e "${RED}错误: ClawNet 未安装${NC}"
+    echo "  安装: npm install -g @husile/clawnet-lite"
+    exit 1
+  fi
+  
+  nohup node "$clawnet_dir/dist/server.js" > "$CONFIG_DIR/clawnet.log" 2>&1 &
+  local pid=$!
+  
+  sleep 2
+  
+  if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+    echo $pid > "$CONFIG_DIR/clawnet.pid"
+    echo -e "${GREEN}✅ ClawNet 启动成功 (PID: $pid)${NC}"
+    echo "  URL: http://localhost:3000"
+    echo "  日志: $CONFIG_DIR/clawnet.log"
+  else
+    echo -e "${RED}❌ ClawNet 启动失败${NC}"
+    echo "  日志: $CONFIG_DIR/clawnet.log"
+  fi
+}
+
+cmd_clawnet_status() {
+  echo
+  echo -e "${CYAN}ClawNet 状态${NC}"
+  echo
+  
+  if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+    local health=$(curl -s http://localhost:3000/health)
+    local nodes=$(echo "$health" | jq -r '.stats.nodes')
+    local relations=$(echo "$health" | jq -r '.stats.relations')
+    local ws=$(echo "$health" | jq -r '.stats.wsConnections')
+    
+    echo -e "  状态: ${GREEN}运行中${NC}"
+    echo "  节点数: $nodes"
+    echo "  关系数: $relations"
+    echo "  WS 连接: $ws"
+    echo
+    
+    # 显示节点列表
+    if [ "$nodes" -gt 0 ]; then
+      echo -e "${CYAN}  节点列表:${NC}"
+      curl -s http://localhost:3000/nodes -H "Authorization: Bearer $CLAWNET_TOKEN" | jq -r '.data[] | "    • \(.id) (\(.type)): \(.name)"'
+      echo
+    fi
+  else
+    echo -e "  状态: ${RED}未运行${NC}"
+    echo
+    echo "  启动: multi-openclaw clawnet"
+  fi
+}
+
+cmd_start_all() {
+  echo -e "${CYAN}启动所有实例...${NC}"
+  
+  for config_file in "$CONFIG_DIR"/*.json; do
+    [ -f "$config_file" ] || continue
+    local name=$(basename "$config_file" .json)
+    cmd_start "$name"
+  done
+}
+
+cmd_stop_all() {
+  echo -e "${CYAN}停止所有实例...${NC}"
+  
+  for config_file in "$CONFIG_DIR"/*.json; do
+    [ -f "$config_file" ] || continue
+    local name=$(basename "$config_file" .json)
+    cmd_stop "$name"
+  done
+}
+
+# ==================== 主程序 ====================
+
+case "${1:-}" in
+  create)
+    cmd_create "$2"
+    ;;
+  start)
+    cmd_start "$2"
+    ;;
+  stop)
+    cmd_stop "$2"
+    ;;
+  status)
+    cmd_status
+    ;;
+  list)
+    cmd_list
+    ;;
+  login)
+    cmd_login "$2"
+    ;;
+  gateway)
+    cmd_gateway "$2"
+    ;;
+  gateway-stop)
+    cmd_gateway_stop "$2"
+    ;;
+  connect)
+    cmd_connect "$2"
+    ;;
+  start-all)
+    cmd_start_all
+    ;;
+  stop-all)
+    cmd_stop_all
+    ;;
+  clawnet)
+    cmd_clawnet_start
+    ;;
+  clawnet-status)
+    cmd_clawnet_status
+    ;;
+  help|--help|-h)
+    show_help
+    ;;
+  *)
+    show_help
+    exit 1
+    ;;
+esac
