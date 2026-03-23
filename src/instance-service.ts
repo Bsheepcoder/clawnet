@@ -131,17 +131,37 @@ export class InstanceManager {
    * 检查微信是否已登录
    */
   private checkWechatLoggedIn(instance: OpenClawInstance): void {
-    if (!instance.wechat?.accountId) {
-      return;
-    }
-
     try {
-      const accountFile = path.join(instance.profileDir, 'openclaw-weixin', 'accounts', `${instance.wechat.accountId}.json`);
+      const wechatDir = path.join(instance.profileDir, 'openclaw-weixin');
+      const accountsListFile = path.join(wechatDir, 'accounts.json');
       
-      if (fs.existsSync(accountFile)) {
-        const accountData = JSON.parse(fs.readFileSync(accountFile, 'utf-8'));
-        instance.wechat.loggedIn = true;
-        instance.wechat.lastLoginAt = accountData.savedAt;
+      // 如果没有 accountId，尝试从 accounts.json 自动发现
+      if (!instance.wechat?.accountId) {
+        if (fs.existsSync(accountsListFile)) {
+          const accountsList = JSON.parse(fs.readFileSync(accountsListFile, 'utf-8'));
+          
+          if (Array.isArray(accountsList) && accountsList.length > 0) {
+            // 使用第一个账号
+            instance.wechat = instance.wechat || { loggedIn: false };
+            instance.wechat.accountId = accountsList[0];
+            console.log(`[instance-manager] Auto-discovered WeChat account for ${instance.name}: ${accountsList[0]}`);
+          }
+        }
+      }
+      
+      // 检查账号文件是否存在
+      if (instance.wechat?.accountId) {
+        const accountFile = path.join(wechatDir, 'accounts', `${instance.wechat.accountId}.json`);
+        
+        if (fs.existsSync(accountFile)) {
+          const accountData = JSON.parse(fs.readFileSync(accountFile, 'utf-8'));
+          instance.wechat.loggedIn = true;
+          instance.wechat.userId = accountData.userId;
+          instance.wechat.lastLoginAt = accountData.savedAt;
+          console.log(`[instance-manager] WeChat logged in for ${instance.name}: ${instance.wechat.accountId}`);
+        } else {
+          instance.wechat.loggedIn = false;
+        }
       }
     } catch (error) {
       console.warn(`[instance-manager] Failed to check WeChat login: ${String(error)}`);
