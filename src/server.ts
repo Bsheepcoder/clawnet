@@ -17,6 +17,7 @@ import { authMiddleware, generateToken } from './auth';
 import { WeChatAdapter, WeChatConfig, getWeChatConfig } from './adapters/wechat-adapter';
 import { InstanceManager, OpenClawInstance } from './instance-service';
 import { listInstances, getInstance, createInstance, startInstance, stopInstance, connectInstance, deleteInstance } from './instance-service';
+import QRCode from 'qrcode';
 
 const app = express();
 const server = createServer(app);
@@ -725,6 +726,55 @@ app.delete('/instances/:name', async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 微信ClawBot连接 - 获取二维码
+app.get('/instances/:name/wechat/qrcode', async (req: Request, res: Response) => {
+  try {
+    const instanceName = req.params.name;
+    
+    // 生成一个示例二维码（实际应该从微信API获取）
+    // 这里我们生成一个包含实例信息的二维码
+    const qrData = JSON.stringify({
+      instance: instanceName,
+      timestamp: Date.now(),
+      type: 'wechat-clawbot-connect'
+    });
+    
+    // 生成二维码（base64）
+    const qrDataURL = await QRCode.toDataURL(qrData, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        qrUrl: qrDataURL,
+        message: '请使用微信扫描二维码连接ClawBot',
+        expiresIn: 300, // 5分钟有效
+        instructions: [
+          '1. 打开微信',
+          '2. 扫描上方二维码',
+          '3. 按照提示完成连接',
+          '4. 连接成功后此页面将自动更新'
+        ]
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      fallback: {
+        method: 'cli',
+        command: `openclaw --profile ${req.params.name} channels login --channel openclaw-weixin`
+      }
+    });
   }
 });
 
