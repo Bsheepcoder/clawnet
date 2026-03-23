@@ -729,51 +729,39 @@ app.delete('/instances/:name', async (req: Request, res: Response) => {
   }
 });
 
-// 微信ClawBot连接 - 获取二维码
+// 微信ClawBot连接 - 获取连接信息
 app.get('/instances/:name/wechat/qrcode', async (req: Request, res: Response) => {
   try {
     const instanceName = req.params.name;
     
-    // 生成一个示例二维码（实际应该从微信API获取）
-    // 这里我们生成一个包含实例信息的二维码
-    const qrData = JSON.stringify({
-      instance: instanceName,
-      timestamp: Date.now(),
-      type: 'wechat-clawbot-connect'
-    });
-    
-    // 生成二维码（base64）
-    const qrDataURL = await QRCode.toDataURL(qrData, {
-      width: 300,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#ffffff'
-      }
-    });
-    
+    // 微信登录需要使用CLI，Web端暂不支持直接扫码
+    // 返回CLI命令和详细说明
     res.json({
-      success: true,
-      data: {
-        qrUrl: qrDataURL,
-        message: '请使用微信扫描二维码连接ClawBot',
-        expiresIn: 300, // 5分钟有效
-        instructions: [
-          '1. 打开微信',
-          '2. 扫描上方二维码',
-          '3. 按照提示完成连接',
-          '4. 连接成功后此页面将自动更新'
+      success: false,
+      error: 'Web端暂不支持直接扫码连接',
+      fallback: {
+        method: 'cli',
+        command: `openclaw --profile ${instanceName} channels login --channel openclaw-weixin`,
+        message: '请在终端运行上述命令进行微信ClawBot连接',
+        steps: [
+          '1. 复制上方命令',
+          '2. 在终端中粘贴并执行',
+          '3. 等待二维码在终端显示',
+          '4. 使用微信扫描二维码',
+          '5. 按照微信提示完成连接',
+          '6. 连接成功后刷新此页面查看状态'
+        ],
+        tips: [
+          '💡 提示：微信登录是一次性操作，使用CLI更可靠',
+          '💡 如果二维码显示不清晰，命令会输出二维码URL',
+          '💡 可以在浏览器中打开URL查看高清二维码'
         ]
       }
     });
   } catch (error: any) {
     res.status(500).json({ 
       success: false, 
-      error: error.message,
-      fallback: {
-        method: 'cli',
-        command: `openclaw --profile ${req.params.name} channels login --channel openclaw-weixin`
-      }
+      error: error.message
     });
   }
 });
