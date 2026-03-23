@@ -322,7 +322,14 @@ export class InstanceManager {
 
     try {
       if (instance.gateway?.pid) {
-        await this.stopProcess(instance.gateway.pid, force);
+        try {
+          await this.stopProcess(instance.gateway.pid, force);
+        } catch (error: any) {
+          // 进程可能已经不存在（ESRCH），继续清理状态
+          console.warn(`[instance-manager] Process ${instance.gateway.pid} may already be dead: ${error.message}`);
+        }
+        
+        // 无论进程是否还存在，都清理状态
         instance.gateway.running = false;
         instance.gateway.pid = undefined;
         instance.status = 'stopped';
@@ -338,7 +345,7 @@ export class InstanceManager {
     } catch (error: any) {
       return {
         success: false,
-        message:String(error) ||String(error)
+        message: String(error) || String(error)
       };
     }
   }
