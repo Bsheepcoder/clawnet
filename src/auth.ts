@@ -17,8 +17,8 @@ declare global {
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  // 健康检查不需要认证
-  if (req.path === '/health' || req.path === '/') {
+  // 健康检查和 Gateway 状态检测不需要认证
+  if (req.path === '/health' || req.path === '/' || req.path === '/gateway/status') {
     return next();
   }
 

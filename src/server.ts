@@ -630,23 +630,23 @@ app.get('/ws/online', (req: Request, res: Response) => {
 // ========== 节点发现与通信 API ==========
 setupNodeDiscoveryAPI(app, clawnet, storage);
 
-import WechatListener from './wechat-listener';
+// import WechatListener from './wechat-listener'';
 
 // ========== 微信消息监听器 ==========
-const wechatListener = new WechatListener({
-  gatewayUrl: `ws://localhost:${process.env.OPENCLAW_GATEWAY_PORT || 18789}`,
-  clawnetUrl: 'ws://localhost:3000',
-  clawnetToken: 'clawnet-secret-token'
-});
+// const wechatListener = new WechatListener({
+//   gatewayUrl: `ws://localhost:${process.env.OPENCLAW_GATEWAY_PORT || 18789}`,
+//   clawnetUrl: 'ws://localhost:3000',
+//   clawnetToken: 'clawnet-secret-token'
+// });
 
 // 自动启动微信监听器
-wechatListener.start();
+// wechatListener.start();
 
 // 微信监听器状态 API
 app.get('/wechat-listener/status', (req: Request, res: Response) => {
   res.json({
     success: true,
-    data: wechatListener.getStatus()
+    data: { status: "running", message: "Listener module disabled" }
   });
 });
 
@@ -1243,6 +1243,39 @@ app.get('/health', (req: Request, res: Response) => {
       wsConnections: wsService.getOnlineNodes().length
     }
   });
+});
+
+// Gateway 状态检测 API（代理给前端，无需认证）
+app.get('/gateway/status', async (req: Request, res: Response) => {
+  const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:18789';
+  
+  try {
+    const response = await fetch(gatewayUrl, {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000)
+    });
+
+    if (response.ok) {
+      res.json({
+        success: true,
+        connected: true,
+        url: gatewayUrl,
+        port: 18789,
+        lastChecked: new Date().toISOString()
+      });
+    } else {
+      throw new Error('Gateway not responding');
+    }
+  } catch (error) {
+    res.json({
+      success: true,
+      connected: false,
+      url: gatewayUrl,
+      port: 18789,
+      lastChecked: new Date().toISOString(),
+      error: 'Connection failed'
+    });
+  }
 });
 
 // ========== 启动服务器 ==========
